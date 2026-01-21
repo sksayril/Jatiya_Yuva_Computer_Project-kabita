@@ -1,0 +1,1621 @@
+# Admin Panel API Documentation
+
+**Base URL:** `/api/admin`  
+**Authentication:** All protected endpoints require JWT token in Authorization header  
+**Branch Isolation:** All endpoints automatically filter data by admin's branch
+
+## Authorization Header (Protected APIs)
+```
+Authorization: Bearer <JWT_TOKEN>
+```
+
+**JWT Token Payload:**
+```json
+{
+  "userId": "admin_user_id",
+  "role": "ADMIN",
+  "branchId": "branch_id"
+}
+```
+
+---
+
+## Authentication
+
+### Admin Login
+**Method:** `POST`  
+**URL:** `/api/admin/login`  
+**Headers:** `Content-Type: application/json`  
+**Body (raw JSON):**
+```json
+{
+  "email": "admin@branch.com",
+  "password": "password123"
+}
+```
+**OR**
+```json
+{
+  "adminId": "admin@branch.com",
+  "password": "password123"
+}
+```
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "jwt_token": "<JWT_TOKEN>",
+  "role": "ADMIN",
+  "branchId": "<BRANCH_ID>",
+  "user": {
+    "id": "<USER_ID>",
+    "name": "Admin Name",
+    "email": "admin@branch.com"
+  }
+}
+```
+
+**Error Responses:**
+- `400` - Missing required fields
+- `401` - Invalid credentials
+- `403` - Account disabled or access denied
+
+---
+
+### Admin Logout
+**Method:** `POST`  
+**URL:** `/api/admin/logout`  
+**Headers:** `Authorization: Bearer <JWT_TOKEN>`
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "message": "Logged out successfully"
+}
+```
+
+---
+
+## Dashboard
+
+### Get Dashboard Summary
+**Method:** `GET`  
+**URL:** `/api/admin/dashboard/summary`  
+**Headers:** `Authorization: Bearer <JWT_TOKEN>`
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "totalStudents": 150,
+    "totalStaff": 10,
+    "todayStudentAttendancePercentage": 85,
+    "todayStaffAttendancePercentage": 100,
+    "currentMonthFeeCollection": 50000,
+    "totalDueFees": 25000,
+    "alerts": [
+      {
+        "type": "HIGH_DUE",
+        "message": "5 student(s) have high due amounts",
+        "count": 5
+      },
+      {
+        "type": "PENDING_APPROVAL",
+        "message": "3 student(s) pending approval",
+        "count": 3
+      }
+    ]
+  }
+}
+```
+
+---
+
+## Student Management
+
+### Manual Student Registration
+**Method:** `POST`  
+**URL:** `/api/admin/students/manual`  
+**Headers:** 
+- `Authorization: Bearer <JWT_TOKEN>`
+- `Content-Type: multipart/form-data` (for file uploads) or `application/json`
+
+**Body (form-data or JSON):**
+```json
+{
+  "admissionDate": "2024-01-13",
+  "courseName": "DCA",
+  "courseType": "Certificate",
+  "studentName": "Moumita Nandi",
+  "guardianName": "Biswanath Nandi",
+  "motherName": "Gita Nandi",
+  "dateOfBirth": "1998-12-09",
+  "mobileNumber": "7431995431",
+  "whatsappNumber": "7431995431",
+  "guardianMobile": "7431995431",
+  "email": "",
+  "gender": "Female",
+  "religion": "Hindu",
+  "category": "General",
+  "address": "Thakurpara, Kalna, Purba Bardhaman",
+  "pincode": "713409",
+  "lastQualification": "HS",
+  "formNumber": "FORM-00123",
+  "receiptNumber": "RCPT-4567",
+  "batchTime": "AM",
+  "officeEntryDate": "2024-01-13",
+  "studentPhoto": "<file>",
+  "studentSignature": "<file>",
+  "officeSignature": "<file>",
+  "formScanImage": "<file>",
+  "studentId": "AUTO",
+  "branchId": "AUTO",
+  "status": "ACTIVE"
+}
+```
+
+**File Upload Fields (optional):**
+- `studentPhoto` (file) - Student photo (jpg/png/webp)
+- `studentSignature` (file) - Student signature (jpg/png/webp/pdf)
+- `officeSignature` (file) - Office signature (jpg/png/webp/pdf)
+- `formScanImage` (file) - Scanned form image (jpg/png/webp/pdf)
+
+**Field Notes:**
+- `studentId`: Use "AUTO" to auto-generate, or provide custom ID
+- `branchId`: Use "AUTO" to use admin's branch, or provide branch ID
+- `courseName`: Course name (will try to find existing course, or store as name)
+- `courseId`: Optional - provide course ID instead of courseName
+- `batchTime`: "AM", "PM", or "EVENING" - will try to find matching batch
+- `batchId`: Optional - provide batch ID instead of batchTime
+- `status`: "ACTIVE", "PENDING", "INACTIVE", or "DROPPED" (default: "ACTIVE")
+
+**Success Response (201):**
+```json
+{
+  "success": true,
+  "message": "Student registered successfully",
+  "data": {
+    "studentId": "DHK001-2024-001",
+    "studentName": "Moumita Nandi",
+    "loginCredentials": {
+      "email": "dhk001-2024-001@dhk001.edu",
+      "password": "STU001"
+    },
+    "qrCode": "data:image/png;base64,..."
+  }
+}
+```
+
+**Error Responses:**
+- `400` - Missing required fields (studentName, mobileNumber)
+- `404` - Branch/Course/Batch not found
+
+---
+
+### Scan Form Image (OCR Placeholder)
+**Method:** `POST`  
+**URL:** `/api/admin/students/scan-form`  
+**Headers:** `Authorization: Bearer <JWT_TOKEN>`  
+**Body (form-data):**
+- `formImage` (file) - Image file of the registration form
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "message": "Form scanned successfully (OCR placeholder)",
+  "data": {
+    "name": "Extracted Name",
+    "mobile": "1234567890",
+    "address": "Extracted Address",
+    "course": "DCA",
+    "date": "2024-01-15T00:00:00.000Z"
+  },
+  "note": "This is a placeholder. Integrate actual OCR service for production."
+}
+```
+
+---
+
+### Approve Pending Student
+**Method:** `PATCH`  
+**URL:** `/api/admin/students/:id/approve`  
+**Headers:** `Authorization: Bearer <JWT_TOKEN>`
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "message": "Student approved successfully",
+  "data": {
+    "_id": "<STUDENT_ID>",
+    "studentId": "DHK001-2024-001",
+    "status": "ACTIVE",
+    ...
+  }
+}
+```
+
+**Error Responses:**
+- `404` - Student not found
+- `400` - Student is not in pending status
+
+---
+
+### Drop Student
+**Method:** `PATCH`  
+**URL:** `/api/admin/students/:id/drop`  
+**Headers:** `Authorization: Bearer <JWT_TOKEN>`
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "message": "Student dropped successfully",
+  "data": {
+    "_id": "<STUDENT_ID>",
+    "status": "DROPPED",
+    ...
+  }
+}
+```
+
+---
+
+### Change Student Batch
+**Method:** `PATCH`  
+**URL:** `/api/admin/students/:id/change-batch`  
+**Headers:** 
+- `Authorization: Bearer <JWT_TOKEN>`
+- `Content-Type: application/json`
+
+**Body (raw JSON):**
+```json
+{
+  "newBatchId": "<NEW_BATCH_ID>"
+}
+```
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "message": "Student batch changed successfully",
+  "data": {
+    "_id": "<STUDENT_ID>",
+    "batchId": "<NEW_BATCH_ID>",
+    ...
+  }
+}
+```
+
+---
+
+### Get All Students
+**Method:** `GET`  
+**URL:** `/api/admin/students`  
+**Headers:** `Authorization: Bearer <JWT_TOKEN>`
+
+**Query Parameters:**
+- `status` (optional) - Filter by status: PENDING, ACTIVE, INACTIVE, DROPPED
+- `batchId` (optional) - Filter by batch
+- `courseId` (optional) - Filter by course
+
+**Example:** `/api/admin/students?status=ACTIVE&batchId=<BATCH_ID>`
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "_id": "<STUDENT_ID>",
+      "studentId": "DHK001-2024-001",
+      "name": "John Doe",
+      "mobile": "1234567890",
+      "status": "ACTIVE",
+      "courseId": {
+        "_id": "<COURSE_ID>",
+        "name": "DCA",
+        "courseCategory": "Basic"
+      },
+      "batchId": {
+        "_id": "<BATCH_ID>",
+        "name": "Morning Batch",
+        "timeSlot": "9:00 AM - 11:00 AM"
+      },
+      "totalFees": 5000,
+      "paidAmount": 3000,
+      "dueAmount": 2000,
+      ...
+    }
+  ]
+}
+```
+
+---
+
+### Get Student by ID
+**Method:** `GET`  
+**URL:** `/api/admin/students/:id`  
+**Headers:** `Authorization: Bearer <JWT_TOKEN>`
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "_id": "<STUDENT_ID>",
+    "studentId": "DHK001-2024-001",
+    "name": "John Doe",
+    "guardianName": "Jane Doe",
+    "mobile": "1234567890",
+    "address": "123 Main Street",
+    "courseId": { ... },
+    "batchId": { ... },
+    "status": "ACTIVE",
+    "totalFees": 5000,
+    "paidAmount": 3000,
+    "dueAmount": 2000,
+    "qrCode": "data:image/png;base64,...",
+    "registrationDate": "2024-01-15T00:00:00.000Z",
+    ...
+  }
+}
+```
+
+---
+
+## Attendance
+
+### Mark Student Attendance
+**Method:** `POST`  
+**URL:** `/api/admin/attendance/student`  
+**Headers:** 
+- `Authorization: Bearer <JWT_TOKEN>`
+- `Content-Type: application/json`
+
+**Body (raw JSON):**
+```json
+{
+  "studentId": "<STUDENT_ID>",
+  "batchId": "<BATCH_ID>",
+  "date": "2024-01-15",
+  "timeSlot": "9:00 AM - 11:00 AM",
+  "method": "QR",
+  "qrData": "{\"studentId\":\"DHK001-2024-001\",\"branchId\":\"<BRANCH_ID>\"}"
+}
+```
+
+**Method Options:**
+- `QR` - QR code scanning
+- `FACE` - Face recognition (placeholder)
+- `MANUAL` - Manual entry
+
+**Success Response (201):**
+```json
+{
+  "success": true,
+  "message": "Student attendance marked successfully",
+  "data": {
+    "_id": "<ATTENDANCE_ID>",
+    "studentId": "<STUDENT_ID>",
+    "batchId": "<BATCH_ID>",
+    "date": "2024-01-15T00:00:00.000Z",
+    "status": "Present",
+    "method": "QR",
+    ...
+  }
+}
+```
+
+**Error Responses:**
+- `400` - Missing required fields, student not in batch, batch limit reached
+- `404` - Student/Batch not found
+- `409` - Attendance already marked for this date
+
+---
+
+### Mark Staff Attendance
+**Method:** `POST`  
+**URL:** `/api/admin/attendance/staff`  
+**Headers:** 
+- `Authorization: Bearer <JWT_TOKEN>`
+- `Content-Type: application/json`
+
+**Body (raw JSON):**
+```json
+{
+  "staffId": "<STAFF_ID>",
+  "date": "2024-01-15",
+  "timeSlot": "9:00 AM - 5:00 PM",
+  "method": "QR",
+  "qrData": "{\"staffId\":\"DHK001-STF-001\",\"branchId\":\"<BRANCH_ID>\"}"
+}
+```
+
+**Success Response (201):**
+```json
+{
+  "success": true,
+  "message": "Staff attendance marked successfully",
+  "data": {
+    "_id": "<ATTENDANCE_ID>",
+    "staffId": "<STAFF_ID>",
+    "date": "2024-01-15T00:00:00.000Z",
+    "checkIn": "2024-01-15T09:00:00.000Z",
+    "status": "Present",
+    "method": "QR",
+    ...
+  }
+}
+```
+
+**Note:** Calling this endpoint again on the same date will record check-out time.
+
+---
+
+### Get Student Attendance
+**Method:** `GET`  
+**URL:** `/api/admin/attendance/student`  
+**Headers:** `Authorization: Bearer <JWT_TOKEN>`
+
+**Query Parameters:**
+- `studentId` (optional) - Filter by student
+- `batchId` (optional) - Filter by batch
+- `startDate` (optional) - Start date (ISO format)
+- `endDate` (optional) - End date (ISO format)
+
+**Example:** `/api/admin/attendance/student?studentId=<STUDENT_ID>&startDate=2024-01-01&endDate=2024-01-31`
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "_id": "<ATTENDANCE_ID>",
+      "studentId": {
+        "_id": "<STUDENT_ID>",
+        "studentId": "DHK001-2024-001",
+        "name": "John Doe"
+      },
+      "batchId": {
+        "_id": "<BATCH_ID>",
+        "name": "Morning Batch",
+        "timeSlot": "9:00 AM - 11:00 AM"
+      },
+      "date": "2024-01-15T00:00:00.000Z",
+      "status": "Present",
+      "method": "QR",
+      ...
+    }
+  ]
+}
+```
+
+---
+
+### Get Staff Attendance
+**Method:** `GET`  
+**URL:** `/api/admin/attendance/staff`  
+**Headers:** `Authorization: Bearer <JWT_TOKEN>`
+
+**Query Parameters:**
+- `staffId` (optional) - Filter by staff
+- `startDate` (optional) - Start date (ISO format)
+- `endDate` (optional) - End date (ISO format)
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "_id": "<ATTENDANCE_ID>",
+      "staffId": {
+        "_id": "<STAFF_ID>",
+        "staffId": "DHK001-STF-001",
+        "name": "Staff Name",
+        "role": "STAFF"
+      },
+      "date": "2024-01-15T00:00:00.000Z",
+      "checkIn": "2024-01-15T09:00:00.000Z",
+      "checkOut": "2024-01-15T17:00:00.000Z",
+      "status": "Present",
+      ...
+    }
+  ]
+}
+```
+
+---
+
+## Payments
+
+### Create Payment
+**Method:** `POST`  
+**URL:** `/api/admin/payments`  
+**Headers:** 
+- `Authorization: Bearer <JWT_TOKEN>`
+- `Content-Type: application/json`
+
+**Body (raw JSON):**
+```json
+{
+  "studentId": "<STUDENT_ID>",
+  "amount": 2000,
+  "paymentMode": "CASH",
+  "discount": 100,
+  "description": "Monthly fee payment",
+  "month": "January",
+  "year": 2024
+}
+```
+
+**Payment Modes:**
+- `CASH` - Cash payment
+- `UPI` - UPI payment
+- `ONLINE` - Online payment
+
+**Success Response (201):**
+```json
+{
+  "success": true,
+  "message": "Payment recorded successfully",
+  "data": {
+    "_id": "<PAYMENT_ID>",
+    "studentId": "<STUDENT_ID>",
+    "amount": 2000,
+    "paymentMode": "CASH",
+    "discount": 100,
+    "receiptNumber": "DHK001-202401-0001",
+    "month": "January",
+    "year": 2024,
+    "receiptPdfUrl": "",
+    "createdAt": "2024-01-15T10:00:00.000Z",
+    ...
+  }
+}
+```
+
+**Note:** Payment automatically updates student's `paidAmount` and `dueAmount`.
+
+---
+
+### Get Payments
+**Method:** `GET`  
+**URL:** `/api/admin/payments`  
+**Headers:** `Authorization: Bearer <JWT_TOKEN>`
+
+**Query Parameters:**
+- `studentId` (optional) - Filter by student
+- `startDate` (optional) - Start date (ISO format)
+- `endDate` (optional) - End date (ISO format)
+- `paymentMode` (optional) - Filter by payment mode: CASH, UPI, ONLINE
+
+**Example:** `/api/admin/payments?studentId=<STUDENT_ID>&startDate=2024-01-01`
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "_id": "<PAYMENT_ID>",
+      "studentId": {
+        "_id": "<STUDENT_ID>",
+        "studentId": "DHK001-2024-001",
+        "name": "John Doe",
+        "mobile": "1234567890"
+      },
+      "amount": 2000,
+      "paymentMode": "CASH",
+      "discount": 100,
+      "receiptNumber": "DHK001-202401-0001",
+      "collectedBy": {
+        "_id": "<USER_ID>",
+        "name": "Admin Name",
+        "email": "admin@branch.com"
+      },
+      "createdAt": "2024-01-15T10:00:00.000Z",
+      ...
+    }
+  ]
+}
+```
+
+---
+
+## Courses
+
+### Create Course
+**Method:** `POST`  
+**URL:** `/api/admin/courses`  
+**Headers:** `Authorization: Bearer <JWT_TOKEN>`  
+**Body (form-data):**
+- `name` (text) - Course name
+- `description` (text) - Course description
+- `duration` (text) - Course duration
+- `courseCategory` (text) - Basic | Advanced | Diploma
+- `courseFees` (text) - Total course fees
+- `admissionFees` (text) - Admission fees
+- `monthlyFees` (text) - Monthly fees
+- `image` (file, optional) - Course image (jpg/png/webp)
+- `pdf` (file, optional) - Course PDF
+
+**Success Response (201):**
+```json
+{
+  "success": true,
+  "message": "Course created successfully",
+  "data": {
+    "_id": "<COURSE_ID>",
+    "name": "DCA",
+    "description": "Diploma in Computer Applications",
+    "duration": "6 months",
+    "courseCategory": "Basic",
+    "courseFees": 5000,
+    "admissionFees": 500,
+    "monthlyFees": 1000,
+    "imageUrl": "https://s3.../image.jpg",
+    "pdfUrl": "https://s3.../document.pdf",
+    "isActive": true,
+    ...
+  }
+}
+```
+
+---
+
+### Get Courses
+**Method:** `GET`  
+**URL:** `/api/admin/courses`  
+**Headers:** `Authorization: Bearer <JWT_TOKEN>`
+
+**Query Parameters:**
+- `courseCategory` (optional) - Filter by category: Basic, Advanced, Diploma
+- `isActive` (optional) - Filter by active status: true, false
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "_id": "<COURSE_ID>",
+      "name": "DCA",
+      "courseCategory": "Basic",
+      "courseFees": 5000,
+      "isActive": true,
+      ...
+    }
+  ]
+}
+```
+
+---
+
+## Batches
+
+### Create Batch
+**Method:** `POST`  
+**URL:** `/api/admin/batches`  
+**Headers:** 
+- `Authorization: Bearer <JWT_TOKEN>`
+- `Content-Type: application/json`
+
+**Body (raw JSON):**
+```json
+{
+  "name": "Morning Batch",
+  "timeSlot": "9:00 AM - 11:00 AM",
+  "monthlyFee": 1000,
+  "isKidsBatch": false,
+  "discountPercentage": 0,
+  "teacherId": "<TEACHER_ID>",
+  "courseId": "<COURSE_ID>",
+  "maxStudents": 30
+}
+```
+
+**Success Response (201):**
+```json
+{
+  "success": true,
+  "message": "Batch created successfully",
+  "data": {
+    "_id": "<BATCH_ID>",
+    "name": "Morning Batch",
+    "timeSlot": "9:00 AM - 11:00 AM",
+    "monthlyFee": 1000,
+    "isKidsBatch": false,
+    "discountPercentage": 0,
+    "teacherId": "<TEACHER_ID>",
+    "courseId": "<COURSE_ID>",
+    "maxStudents": 30,
+    "currentStudents": 0,
+    "isActive": true,
+    ...
+  }
+}
+```
+
+**Note:** For kids batches, `discountPercentage` is locked (read-only) once set.
+
+---
+
+### Get Batches
+**Method:** `GET`  
+**URL:** `/api/admin/batches`  
+**Headers:** `Authorization: Bearer <JWT_TOKEN>`
+
+**Query Parameters:**
+- `courseId` (optional) - Filter by course
+- `isActive` (optional) - Filter by active status
+- `isKidsBatch` (optional) - Filter kids batches: true, false
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "_id": "<BATCH_ID>",
+      "name": "Morning Batch",
+      "timeSlot": "9:00 AM - 11:00 AM",
+      "monthlyFee": 1000,
+      "courseId": {
+        "_id": "<COURSE_ID>",
+        "name": "DCA",
+        "courseCategory": "Basic"
+      },
+      "teacherId": {
+        "_id": "<TEACHER_ID>",
+        "name": "Teacher Name",
+        "email": "teacher@branch.com"
+      },
+      "currentStudents": 25,
+      "maxStudents": 30,
+      ...
+    }
+  ]
+}
+```
+
+---
+
+### Update Batch
+**Method:** `PATCH`  
+**URL:** `/api/admin/batches/:id`  
+**Headers:** 
+- `Authorization: Bearer <JWT_TOKEN>`
+- `Content-Type: application/json`
+
+**Body (raw JSON):**
+```json
+{
+  "name": "Updated Batch Name",
+  "timeSlot": "10:00 AM - 12:00 PM",
+  "monthlyFee": 1200,
+  "teacherId": "<NEW_TEACHER_ID>",
+  "maxStudents": 35,
+  "isActive": true
+}
+```
+
+**Note:** `discountPercentage` cannot be changed for kids batches.
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "message": "Batch updated successfully",
+  "data": {
+    "_id": "<BATCH_ID>",
+    "name": "Updated Batch Name",
+    ...
+  }
+}
+```
+
+---
+
+## Staff/Teacher Management
+
+### Create Staff/Teacher
+**Method:** `POST`  
+**URL:** `/api/admin/staff`  
+**Headers:** 
+- `Authorization: Bearer <JWT_TOKEN>`
+- `Content-Type: application/json`
+
+**Body (raw JSON):**
+```json
+{
+  "name": "Staff Name",
+  "email": "staff@branch.com",
+  "mobile": "1234567890",
+  "role": "TEACHER",
+  "assignedBatches": ["<BATCH_ID_1>", "<BATCH_ID_2>"],
+  "salaryType": "PER_CLASS",
+  "salaryRate": 300
+}
+```
+
+**Role Options:**
+- `STAFF` - Staff member
+- `TEACHER` - Teacher
+
+**Salary Type Options:**
+- `PER_CLASS` - Payment per class taken
+- `MONTHLY_FIXED` - Fixed monthly salary
+- `HOURLY` - Hourly rate
+
+**Success Response (201):**
+```json
+{
+  "success": true,
+  "message": "Staff created successfully",
+  "data": {
+    "_id": "<STAFF_ID>",
+    "staffId": "DHK001-TCH-001",
+    "name": "Staff Name",
+    "email": "staff@branch.com",
+    "role": "TEACHER",
+    "salaryType": "PER_CLASS",
+    "salaryRate": 300,
+    "currentMonthClasses": 0,
+    "currentMonthSalary": 0,
+    "qrCode": "data:image/png;base64,...",
+    "loginCredentials": {
+      "email": "staff@branch.com",
+      "password": "STF001"
+    },
+    "isActive": true,
+    ...
+  }
+}
+```
+
+---
+
+### Get Staff
+**Method:** `GET`  
+**URL:** `/api/admin/staff`  
+**Headers:** `Authorization: Bearer <JWT_TOKEN>`
+
+**Query Parameters:**
+- `role` (optional) - Filter by role: STAFF, TEACHER
+- `isActive` (optional) - Filter by active status: true, false
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "_id": "<STAFF_ID>",
+      "staffId": "DHK001-TCH-001",
+      "name": "Staff Name",
+      "email": "staff@branch.com",
+      "role": "TEACHER",
+      "assignedBatches": [
+        {
+          "_id": "<BATCH_ID>",
+          "name": "Morning Batch",
+          "timeSlot": "9:00 AM - 11:00 AM"
+        }
+      ],
+      "salaryType": "PER_CLASS",
+      "salaryRate": 300,
+      "currentMonthClasses": 20,
+      "currentMonthSalary": 6000,
+      ...
+    }
+  ]
+}
+```
+
+---
+
+## Exams
+
+### Create Exam
+**Method:** `POST`  
+**URL:** `/api/admin/exams`  
+**Headers:** 
+- `Authorization: Bearer <JWT_TOKEN>`
+- `Content-Type: application/json`
+
+**Body (raw JSON):**
+```json
+{
+  "name": "Monthly Test - January",
+  "examType": "MONTHLY",
+  "courseId": "<COURSE_ID>",
+  "batchId": "<BATCH_ID>",
+  "examDate": "2024-01-30",
+  "maxMarks": 100,
+  "passingMarks": 40
+}
+```
+
+**Exam Type Options:**
+- `MONTHLY` - Monthly exam
+- `6M` - 6-month exam
+- `1Y` - 1-year exam
+
+**Success Response (201):**
+```json
+{
+  "success": true,
+  "message": "Exam created successfully",
+  "data": {
+    "_id": "<EXAM_ID>",
+    "name": "Monthly Test - January",
+    "examType": "MONTHLY",
+    "courseId": "<COURSE_ID>",
+    "batchId": "<BATCH_ID>",
+    "examDate": "2024-01-30T00:00:00.000Z",
+    "maxMarks": 100,
+    "passingMarks": 40,
+    "isActive": true,
+    ...
+  }
+}
+```
+
+---
+
+### Get Exams
+**Method:** `GET`  
+**URL:** `/api/admin/exams`  
+**Headers:** `Authorization: Bearer <JWT_TOKEN>`
+
+**Query Parameters:**
+- `examType` (optional) - Filter by type: MONTHLY, 6M, 1Y
+- `courseId` (optional) - Filter by course
+- `isActive` (optional) - Filter by active status
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "_id": "<EXAM_ID>",
+      "name": "Monthly Test - January",
+      "examType": "MONTHLY",
+      "courseId": {
+        "_id": "<COURSE_ID>",
+        "name": "DCA",
+        "courseCategory": "Basic"
+      },
+      "examDate": "2024-01-30T00:00:00.000Z",
+      "maxMarks": 100,
+      "passingMarks": 40,
+      ...
+    }
+  ]
+}
+```
+
+---
+
+## Results
+
+### Create/Update Result
+**Method:** `POST`  
+**URL:** `/api/admin/results`  
+**Headers:** 
+- `Authorization: Bearer <JWT_TOKEN>`
+- `Content-Type: application/json`
+
+**Body (raw JSON):**
+```json
+{
+  "examId": "<EXAM_ID>",
+  "studentId": "<STUDENT_ID>",
+  "marksObtained": 75,
+  "maxMarks": 100,
+  "remarks": "Good performance"
+}
+```
+
+**Success Response (201):**
+```json
+{
+  "success": true,
+  "message": "Result recorded successfully",
+  "data": {
+    "_id": "<RESULT_ID>",
+    "examId": "<EXAM_ID>",
+    "studentId": "<STUDENT_ID>",
+    "marksObtained": 75,
+    "maxMarks": 100,
+    "percentage": 75,
+    "status": "PASS",
+    "remarks": "Good performance",
+    ...
+  }
+}
+```
+
+**Note:** Result automatically calculates percentage and determines PASS/FAIL status.
+
+---
+
+### Get Results
+**Method:** `GET`  
+**URL:** `/api/admin/results`  
+**Headers:** `Authorization: Bearer <JWT_TOKEN>`
+
+**Query Parameters:**
+- `examId` (optional) - Filter by exam
+- `studentId` (optional) - Filter by student
+- `status` (optional) - Filter by status: PASS, FAIL
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "_id": "<RESULT_ID>",
+      "examId": {
+        "_id": "<EXAM_ID>",
+        "name": "Monthly Test - January",
+        "examType": "MONTHLY",
+        "examDate": "2024-01-30T00:00:00.000Z"
+      },
+      "studentId": {
+        "_id": "<STUDENT_ID>",
+        "studentId": "DHK001-2024-001",
+        "name": "John Doe"
+      },
+      "marksObtained": 75,
+      "maxMarks": 100,
+      "percentage": 75,
+      "status": "PASS",
+      ...
+    }
+  ]
+}
+```
+
+---
+
+## Certificates
+
+### Generate Certificate
+**Method:** `POST`  
+**URL:** `/api/admin/certificates`  
+**Headers:** 
+- `Authorization: Bearer <JWT_TOKEN>`
+- `Content-Type: application/json`
+
+**Body (raw JSON):**
+```json
+{
+  "studentId": "<STUDENT_ID>",
+  "courseId": "<COURSE_ID>"
+}
+```
+
+**Success Response (201):**
+```json
+{
+  "success": true,
+  "message": "Certificate generated successfully",
+  "data": {
+    "_id": "<CERTIFICATE_ID>",
+    "studentId": "<STUDENT_ID>",
+    "courseId": "<COURSE_ID>",
+    "certificateId": "CERT-2024-000001",
+    "issueDate": "2024-01-15T00:00:00.000Z",
+    "verified": true,
+    "qrCode": "data:image/png;base64,...",
+    "certificatePdfUrl": "",
+    ...
+  }
+}
+```
+
+**Error Responses:**
+- `400` - Student must pass all required exams
+- `409` - Certificate already generated
+
+**Note:** Student must have PASS status in all required exams for the course.
+
+---
+
+### Get Certificates
+**Method:** `GET`  
+**URL:** `/api/admin/certificates`  
+**Headers:** `Authorization: Bearer <JWT_TOKEN>`
+
+**Query Parameters:**
+- `studentId` (optional) - Filter by student
+- `courseId` (optional) - Filter by course
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "_id": "<CERTIFICATE_ID>",
+      "certificateId": "CERT-2024-000001",
+      "studentId": {
+        "_id": "<STUDENT_ID>",
+        "studentId": "DHK001-2024-001",
+        "name": "John Doe"
+      },
+      "courseId": {
+        "_id": "<COURSE_ID>",
+        "name": "DCA",
+        "courseCategory": "Basic"
+      },
+      "issueDate": "2024-01-15T00:00:00.000Z",
+      "verified": true,
+      ...
+    }
+  ]
+}
+```
+
+---
+
+## Inquiries
+
+### Create Inquiry
+**Method:** `POST`  
+**URL:** `/api/admin/inquiries`  
+**Headers:** 
+- `Authorization: Bearer <JWT_TOKEN>`
+- `Content-Type: application/json`
+
+**Body (raw JSON):**
+```json
+{
+  "name": "Prospect Name",
+  "mobile": "1234567890",
+  "email": "prospect@email.com",
+  "address": "123 Main Street",
+  "courseInterest": "DCA",
+  "source": "Website",
+  "notes": "Interested in morning batch"
+}
+```
+
+**Success Response (201):**
+```json
+{
+  "success": true,
+  "message": "Inquiry created successfully",
+  "data": {
+    "_id": "<INQUIRY_ID>",
+    "name": "Prospect Name",
+    "mobile": "1234567890",
+    "status": "NEW",
+    "courseInterest": "DCA",
+    "source": "Website",
+    "handledBy": "<USER_ID>",
+    ...
+  }
+}
+```
+
+---
+
+### Get Inquiries
+**Method:** `GET`  
+**URL:** `/api/admin/inquiries`  
+**Headers:** `Authorization: Bearer <JWT_TOKEN>`
+
+**Query Parameters:**
+- `status` (optional) - Filter by status: NEW, CONTACTED, FOLLOW_UP, CONVERTED, LOST
+- `source` (optional) - Filter by source
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "_id": "<INQUIRY_ID>",
+      "name": "Prospect Name",
+      "mobile": "1234567890",
+      "email": "prospect@email.com",
+      "status": "NEW",
+      "courseInterest": "DCA",
+      "source": "Website",
+      "convertedToStudentId": null,
+      "handledBy": {
+        "_id": "<USER_ID>",
+        "name": "Admin Name",
+        "email": "admin@branch.com"
+      },
+      ...
+    }
+  ]
+}
+```
+
+---
+
+### Convert Inquiry to Student
+**Method:** `PATCH`  
+**URL:** `/api/admin/inquiries/:id/convert`  
+**Headers:** 
+- `Authorization: Bearer <JWT_TOKEN>`
+- `Content-Type: application/json`
+
+**Body (raw JSON):**
+```json
+{
+  "studentId": "<STUDENT_ID>"
+}
+```
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "message": "Inquiry converted to student successfully",
+  "data": {
+    "_id": "<INQUIRY_ID>",
+    "status": "CONVERTED",
+    "convertedToStudentId": "<STUDENT_ID>",
+    ...
+  }
+}
+```
+
+---
+
+## Recorded Classes
+
+### Create Recorded Class
+**Method:** `POST`  
+**URL:** `/api/admin/recorded-classes`  
+**Headers:** `Authorization: Bearer <JWT_TOKEN>`  
+**Body (form-data):**
+- `batchId` (text) - Batch ID
+- `courseId` (text) - Course ID
+- `title` (text) - Class title
+- `description` (text, optional) - Class description
+- `duration` (text, optional) - Video duration in seconds
+- `expiryDate` (text, optional) - Expiry date (ISO format)
+- `allowedStudents` (text, optional) - Comma-separated student IDs
+- `allowDownload` (text, optional) - true/false
+- `video` (file) - Video file (mp4/avi/mov/mkv)
+- `thumbnail` (file, optional) - Thumbnail image
+
+**Success Response (201):**
+```json
+{
+  "success": true,
+  "message": "Recorded class created successfully",
+  "data": {
+    "_id": "<RECORDED_CLASS_ID>",
+    "batchId": "<BATCH_ID>",
+    "courseId": "<COURSE_ID>",
+    "title": "Introduction to Programming",
+    "description": "Basic programming concepts",
+    "videoUrl": "https://s3.../video.mp4",
+    "thumbnailUrl": "https://s3.../thumbnail.jpg",
+    "duration": 3600,
+    "expiryDate": "2024-12-31T00:00:00.000Z",
+    "accessControl": {
+      "allowedStudents": ["<STUDENT_ID_1>", "<STUDENT_ID_2>"],
+      "allowDownload": false
+    },
+    "isActive": true,
+    ...
+  }
+}
+```
+
+---
+
+### Get Recorded Classes
+**Method:** `GET`  
+**URL:** `/api/admin/recorded-classes`  
+**Headers:** `Authorization: Bearer <JWT_TOKEN>`
+
+**Query Parameters:**
+- `batchId` (optional) - Filter by batch
+- `courseId` (optional) - Filter by course
+- `isActive` (optional) - Filter by active status
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "_id": "<RECORDED_CLASS_ID>",
+      "title": "Introduction to Programming",
+      "batchId": {
+        "_id": "<BATCH_ID>",
+        "name": "Morning Batch",
+        "timeSlot": "9:00 AM - 11:00 AM"
+      },
+      "courseId": {
+        "_id": "<COURSE_ID>",
+        "name": "DCA",
+        "courseCategory": "Basic"
+      },
+      "videoUrl": "https://s3.../video.mp4",
+      "duration": 3600,
+      "expiryDate": "2024-12-31T00:00:00.000Z",
+      "accessControl": {
+        "allowedStudents": [
+          {
+            "_id": "<STUDENT_ID>",
+            "studentId": "DHK001-2024-001",
+            "name": "John Doe"
+          }
+        ],
+        "allowDownload": false
+      },
+      ...
+    }
+  ]
+}
+```
+
+---
+
+## Reports
+
+### Get Attendance Report
+**Method:** `GET`  
+**URL:** `/api/admin/reports/attendance`  
+**Headers:** `Authorization: Bearer <JWT_TOKEN>`
+
+**Query Parameters:**
+- `type` (required) - Report type: `student` or `staff`
+- `startDate` (optional) - Start date (ISO format), defaults to first day of current month
+- `endDate` (optional) - End date (ISO format), defaults to last day of current month
+- `batchId` (optional) - Filter by batch (for student reports)
+- `studentId` (optional) - Filter by student (for student reports)
+- `staffId` (optional) - Filter by staff (for staff reports, use `studentId` param)
+
+**Example:** `/api/admin/reports/attendance?type=student&startDate=2024-01-01&endDate=2024-01-31&batchId=<BATCH_ID>`
+
+**Success Response (200) - Student:**
+```json
+{
+  "success": true,
+  "data": {
+    "summary": {
+      "totalRecords": 450,
+      "presentCount": 380,
+      "absentCount": 60,
+      "lateCount": 10,
+      "attendancePercentage": 84
+    },
+    "records": [...]
+  },
+  "export": {
+    "format": "pdf",
+    "url": ""
+  }
+}
+```
+
+**Success Response (200) - Staff:**
+```json
+{
+  "success": true,
+  "data": {
+    "summary": {
+      "totalRecords": 200,
+      "presentCount": 195,
+      "attendancePercentage": 98
+    },
+    "records": [...]
+  },
+  "export": {
+    "format": "pdf",
+    "url": ""
+  }
+}
+```
+
+---
+
+### Get Fees Report
+**Method:** `GET`  
+**URL:** `/api/admin/reports/fees`  
+**Headers:** `Authorization: Bearer <JWT_TOKEN>`
+
+**Query Parameters:**
+- `startDate` (optional) - Start date (ISO format)
+- `endDate` (optional) - End date (ISO format)
+- `studentId` (optional) - Filter by student
+- `paymentMode` (optional) - Filter by payment mode: CASH, UPI, ONLINE
+
+**Example:** `/api/admin/reports/fees?startDate=2024-01-01&endDate=2024-01-31`
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "summary": {
+      "totalCollection": 150000,
+      "totalDiscount": 5000,
+      "netCollection": 145000,
+      "totalPayments": 120,
+      "paymentModeBreakdown": {
+        "cash": 80,
+        "upi": 30,
+        "online": 10
+      }
+    },
+    "records": [...]
+  },
+  "export": {
+    "format": "excel",
+    "url": ""
+  }
+}
+```
+
+---
+
+### Get Salary Report
+**Method:** `GET`  
+**URL:** `/api/admin/reports/salary`  
+**Headers:** `Authorization: Bearer <JWT_TOKEN>`
+
+**Query Parameters:**
+- `month` (optional) - Month number (1-12), defaults to current month
+- `year` (optional) - Year, defaults to current year
+- `staffId` (optional) - Filter by staff
+
+**Example:** `/api/admin/reports/salary?month=1&year=2024`
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "month": 1,
+    "year": 2024,
+    "summary": {
+      "totalStaff": 10,
+      "totalSalary": 50000
+    },
+    "records": [
+      {
+        "staffId": "DHK001-TCH-001",
+        "name": "Teacher Name",
+        "role": "TEACHER",
+        "salaryType": "PER_CLASS",
+        "salaryRate": 300,
+        "currentMonthClasses": 20,
+        "calculatedSalary": 6000
+      },
+      ...
+    ]
+  },
+  "export": {
+    "format": "pdf",
+    "url": ""
+  }
+}
+```
+
+---
+
+## Health Check
+
+### Server Health
+**Method:** `GET`  
+**URL:** `/api/admin/health`  
+**No Authentication Required**
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "message": "Admin Panel Server is running",
+  "timestamp": "2024-01-15T10:00:00.000Z"
+}
+```
+
+---
+
+## Error Responses
+
+All endpoints may return the following error responses:
+
+### 400 Bad Request
+```json
+{
+  "success": false,
+  "message": "Missing required fields: name, mobile, courseId, batchId"
+}
+```
+
+### 401 Unauthorized
+```json
+{
+  "success": false,
+  "message": "Invalid or expired token"
+}
+```
+
+### 403 Forbidden
+```json
+{
+  "success": false,
+  "message": "Access denied. Admin role required"
+}
+```
+
+### 404 Not Found
+```json
+{
+  "success": false,
+  "message": "Student not found"
+}
+```
+
+### 409 Conflict
+```json
+{
+  "success": false,
+  "message": "Attendance already marked for this date"
+}
+```
+
+### 500 Internal Server Error
+```json
+{
+  "success": false,
+  "message": "Server error while creating student",
+  "error": "Detailed error message (only in development)"
+}
+```
+
+---
+
+## Notes
+
+1. **Branch Isolation:** All endpoints automatically filter data by the admin's branch. Admins can only access data from their assigned branch.
+
+2. **JWT Token:** Token must be included in the Authorization header for all protected endpoints. Token expires after 7 days (configurable).
+
+3. **File Uploads:** File uploads support both AWS S3 and local storage. If S3 is not configured, files are stored locally.
+
+4. **Placeholders:**
+   - OCR functionality is placeholder - integrate actual OCR service
+   - PDF generation is placeholder - integrate PDF library
+   - Face recognition is placeholder - integrate face recognition service
+
+5. **QR Codes:** QR codes are generated for students, staff, and certificates. QR data contains JSON with relevant IDs.
+
+6. **Auto Calculations:**
+   - Student fees are auto-calculated based on registration date
+   - Staff salary is auto-calculated based on attendance (for PER_CLASS type)
+   - Result percentage and pass/fail status are auto-calculated
+
+7. **Kids Batch Discount:** Discount percentage for kids batches is locked (read-only) once set.
+
+8. **Certificate Generation:** Requires student to have PASS status in all required exams for the course.
+
+---
+
+## API Version
+
+**Version:** 1.0.0  
+**Last Updated:** 2024-01-15
