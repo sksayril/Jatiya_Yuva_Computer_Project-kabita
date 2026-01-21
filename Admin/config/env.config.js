@@ -24,8 +24,8 @@ const envConfig = {
   
   // AWS S3 Configuration
   AWS_REGION: process.env.AWS_REGION || 'eu-north-1',
-  AWS_ACCESS_KEY_ID: process.env.AWS_ACCESS_KEY_ID || '',
-  AWS_SECRET_ACCESS_KEY: process.env.AWS_SECRET_ACCESS_KEY || '',
+  AWS_ACCESS_KEY_ID: process.env.AWS_ACCESS_KEY_ID || 'AKIA45SPDOFAN2M3TJUK',
+  AWS_SECRET_ACCESS_KEY: process.env.AWS_SECRET_ACCESS_KEY || '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',
   AWS_S3_BUCKET: process.env.AWS_S3_BUCKET || 'notes-market-bucket',
   
   // QR Code Configuration
