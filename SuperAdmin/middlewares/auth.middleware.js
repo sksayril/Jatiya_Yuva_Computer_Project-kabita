@@ -25,9 +25,27 @@ const authenticateSuperAdmin = async (req, res, next) => {
     try {
       decoded = verifyToken(token);
     } catch (error) {
+      // Provide more detailed error information in development
+      const errorMessage = config.isDevelopment() 
+        ? `Token verification failed: ${error.message}` 
+        : 'Invalid or expired token';
+      
+      console.error('Token verification error:', {
+        error: error.message,
+        name: error.name,
+        tokenLength: token.length,
+        tokenPreview: token.substring(0, 20) + '...'
+      });
+      
       return res.status(401).json({
         success: false,
-        message: 'Invalid or expired token',
+        message: errorMessage,
+        ...(config.isDevelopment() && { 
+          errorDetails: {
+            name: error.name,
+            message: error.message
+          }
+        }),
       });
     }
 

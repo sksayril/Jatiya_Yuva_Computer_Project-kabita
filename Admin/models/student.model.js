@@ -207,7 +207,7 @@ const studentSchema = new mongoose.Schema(
 
 // Indexes for performance
 studentSchema.index({ branchId: 1, status: 1 });
-studentSchema.index({ studentId: 1 });
+// studentId already indexed via unique: true
 studentSchema.index({ mobile: 1 });
 studentSchema.index({ mobileNumber: 1 });
 studentSchema.index({ studentName: 1 });
@@ -215,7 +215,13 @@ studentSchema.index({ courseName: 1 });
 studentSchema.index({ formNumber: 1 });
 studentSchema.index({ receiptNumber: 1 });
 
-// Check if model already exists to avoid overwrite error
-const Student = mongoose.models.Student || mongoose.model('Student', studentSchema);
+// Explicitly delete existing model if it exists to avoid conflicts with SuperAdmin Student model
+// This ensures we always use the Admin Student model for Admin operations
+if (mongoose.models.Student) {
+  delete mongoose.models.Student;
+}
+
+// Register the Admin Student model
+const Student = mongoose.model('Student', studentSchema);
 
 module.exports = Student;

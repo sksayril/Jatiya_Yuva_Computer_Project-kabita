@@ -1,5 +1,13 @@
 const mongoose = require('mongoose');
 
+/**
+ * SuperAdmin Student Model (Simplified)
+ * Note: This is a simplified model for SuperAdmin use.
+ * The main Student model is in Admin/models/student.model.js
+ * 
+ * This model should NOT be used for student registration.
+ * Use Admin/models/student.model.js instead.
+ */
 const studentSchema = new mongoose.Schema(
   {
     branchId: {
@@ -14,12 +22,11 @@ const studentSchema = new mongoose.Schema(
     },
     course: {
       type: String,
-      required: [true, 'Course is required'],
       trim: true,
     },
     fees: {
       type: Number,
-      required: [true, 'Fees is required'],
+      default: 0,
       min: 0,
     },
     dueAmount: {
@@ -31,8 +38,9 @@ const studentSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// Use a different collection name to avoid conflicts
 // Check if model already exists to avoid overwrite error
-const Student = mongoose.models.Student || mongoose.model('Student', studentSchema);
+const SuperAdminStudent = mongoose.models.SuperAdminStudent || mongoose.model('SuperAdminStudent', studentSchema);
 
-module.exports = Student;
+module.exports = SuperAdminStudent;
 

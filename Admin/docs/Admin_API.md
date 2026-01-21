@@ -126,27 +126,47 @@ Authorization: Bearer <JWT_TOKEN>
 **Body (form-data or JSON):**
 ```json
 {
-  "admissionDate": "2024-01-13",
-  "courseName": "DCA",
-  "courseType": "Certificate",
-  "studentName": "Moumita Nandi",
-  "guardianName": "Biswanath Nandi",
-  "motherName": "Gita Nandi",
-  "dateOfBirth": "1998-12-09",
-  "mobileNumber": "7431995431",
-  "whatsappNumber": "7431995431",
-  "guardianMobile": "7431995431",
-  "email": "",
-  "gender": "Female",
-  "religion": "Hindu",
-  "category": "General",
-  "address": "Thakurpara, Kalna, Purba Bardhaman",
-  "pincode": "713409",
-  "lastQualification": "HS",
-  "formNumber": "FORM-00123",
-  "receiptNumber": "RCPT-4567",
-  "batchTime": "AM",
-  "officeEntryDate": "2024-01-13",
+  "admission": {
+    "admission_date": "2026-01-13",
+    "course": {
+      "code": "DCA",
+      "type": "Certificate"
+    }
+  },
+  "student": {
+    "name": "Moumita Nandi",
+    "date_of_birth": "1998-12-09",
+    "gender": "Female",
+    "religion": "Hindu",
+    "caste": "General"
+  },
+  "family_details": {
+    "guardian_name": "Biswanath Nandi",
+    "mother_name": "Gita Nandi"
+  },
+  "contact_details": {
+    "mobile": "7431995431",
+    "whatsapp": "7431995431",
+    "guardian_contact": "7431995431",
+    "email": "ads@gmail.com"
+  },
+  "address": {
+    "village": "Thakurpara",
+    "post_office": "Kalna",
+    "district": "Purba Bardhaman",
+    "state": "West Bengal",
+    "pincode": "713409",
+    "country": "India"
+  },
+  "education": {
+    "last_qualification": "HS"
+  },
+  "office_use": {
+    "form_number": "FORM-00123",
+    "receipt_number": "RCPT-4567",
+    "batch_time": "AM",
+    "date": "2026-01-13"
+  },
   "studentPhoto": "<file>",
   "studentSignature": "<file>",
   "officeSignature": "<file>",
@@ -156,6 +176,35 @@ Authorization: Bearer <JWT_TOKEN>
   "status": "ACTIVE"
 }
 ```
+
+**Note:** This API now uses a nested object structure. All previous flat fields have been removed. The data is organized into logical groups: `admission`, `student`, `family_details`, `contact_details`, `address`, `education`, and `office_use`.
+
+**Field Descriptions:**
+- `admission.admission_date`: Date of admission (YYYY-MM-DD format)
+- `admission.course.code`: Course code/name (e.g., "DCA")
+- `admission.course.type`: Course type (e.g., "Certificate", "Diploma")
+- `student.name`: Full name of the student (required)
+- `student.date_of_birth`: Date of birth (YYYY-MM-DD format)
+- `student.gender`: Gender (Male/Female/Other)
+- `student.religion`: Religion
+- `student.caste`: Caste/Category
+- `family_details.guardian_name`: Name of guardian
+- `family_details.mother_name`: Name of mother
+- `contact_details.mobile`: Mobile number (required)
+- `contact_details.whatsapp`: WhatsApp number
+- `contact_details.guardian_contact`: Guardian's contact number
+- `contact_details.email`: Email address
+- `address.village`: Village name
+- `address.post_office`: Post office name
+- `address.district`: District name
+- `address.state`: State name
+- `address.pincode`: PIN code
+- `address.country`: Country name
+- `education.last_qualification`: Last educational qualification
+- `office_use.form_number`: Form number
+- `office_use.receipt_number`: Receipt number
+- `office_use.batch_time`: Batch time (AM/PM/EVENING)
+- `office_use.date`: Office entry date (YYYY-MM-DD format)
 
 **File Upload Fields (optional):**
 - `studentPhoto` (file) - Student photo (jpg/png/webp)

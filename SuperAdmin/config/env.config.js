@@ -1,5 +1,8 @@
 const path = require('path');
-require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
+// Load .env from root directory (same as main app.js)
+// This ensures JWT_SECRET is consistent across the application
+// From SuperAdmin/config/ -> go up 2 levels to root -> .env
+require('dotenv').config({ path: path.join(__dirname, '..', '..', '.env') });
 
 /**
  * Environment Configuration Manager

@@ -26,5 +26,5 @@
     "nodemon": "^3.1.11",
     "qrcode": "^1.5.4"
   },
-  "description": ""
+  "description": "A complete backend system for \"National Youth Computer Center\" with Super Admin and Branch Admin panels."
 }

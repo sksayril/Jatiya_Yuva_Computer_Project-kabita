@@ -1,82 +1,62 @@
+/**
+ * Main Application Server
+ * Single unified Express server with all module routers
+ */
+
 const express = require('express');
-const mongoose = require('mongoose');
 const path = require('path');
+require('dotenv').config();
 
-// Config imports
-const superAdminConfig = require('./SuperAdmin/config/env.config');
-const adminConfig = require('./Admin/config/env.config');
-const staffConfig = require('./Staff/config/env.config');
-const studentConfig = require('./Student/config/env.config');
-const teacherConfig = require('./Teacher/config/env.config');
+// Database connection (must be imported first)
+const connectDB = require('./db');
 
-// App imports (unified)
-const superAdminApp = require('./SuperAdmin/app');
-const adminApp = require('./Admin/app');
-const staffApp = require('./Staff/app');
-const studentApp = require('./Student/app');
-const teacherApp = require('./Teacher/app');
+// Import routers from each module
+const superAdminRouter = require('./SuperAdmin/app');
+const adminRouter = require('./Admin/app');
+const staffRouter = require('./Staff/app');
+const studentRouter = require('./Student/app');
+const teacherRouter = require('./Teacher/app');
 
+// Public routes (no authentication required)
+const certificatePublicRoutes = require('./SuperAdmin/routes/certificatePublic.routes');
+
+// Create Express app
 const app = express();
 
-// Prepare for Mongoose strictQuery default change
-mongoose.set('strictQuery', false);
-
-// Middleware
+// ============================================
+// MIDDLEWARE
+// ============================================
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Static file serving for uploads
 app.use('/uploads', express.static(path.join(__dirname, 'SuperAdmin', 'uploads')));
 app.use('/uploads', express.static(path.join(__dirname, 'Admin', 'uploads')));
 app.use('/uploads', express.static(path.join(__dirname, 'Staff', 'uploads')));
+app.use('/uploads', express.static(path.join(__dirname, 'Student', 'uploads')));
 app.use('/uploads', express.static(path.join(__dirname, 'Teacher', 'uploads')));
 
-// MongoDB Connection
-const connectDB = async () => {
-  try {
-    // Use SuperAdmin config for MongoDB (both use same database)
-    await mongoose.connect(superAdminConfig.MONGODB_URI, {
-      dbName: superAdminConfig.MONGODB_DB_NAME,
-    });
+// ============================================
+// ROUTES
+// ============================================
 
-    console.log('✅ MongoDB connected successfully');
-    console.log(`📦 Database: ${mongoose.connection.name}`);
-  } catch (error) {
-    console.error('❌ MongoDB connection error:', error.message);
-    process.exit(1);
-  }
-};
+// Public Routes (no authentication)
+app.use('/api/certificates', certificatePublicRoutes);
 
-// Connect to MongoDB
-connectDB();
+// Super Admin Routes
+app.use('/api/super-admin', superAdminRouter);
 
-// ============================================
-// SUPER ADMIN ROUTES
-// ============================================
-// Mount SuperAdmin App (unified)
-app.use('/api/super-admin', superAdminApp);
+// Admin Routes
+app.use('/api/admin', adminRouter);
 
-// ============================================
-// ADMIN ROUTES
-// ============================================
-// Mount Admin App (unified)
-app.use('/api/admin', adminApp);
+// Staff Routes
+app.use('/api/staff', staffRouter);
 
-// ============================================
-// STAFF ROUTES
-// ============================================
-// Mount Staff App (unified)
-app.use('/api/staff', staffApp);
+// Student Routes
+app.use('/api/student', studentRouter);
 
-// ============================================
-// STUDENT ROUTES
-// ============================================
-// Mount Student App (unified)
-app.use('/api/student', studentApp);
-
-// ============================================
-// TEACHER ROUTES
-// ============================================
-// Mount Teacher App (unified)
-app.use('/api/teacher', teacherApp);
+// Teacher Routes
+app.use('/api/teacher', teacherRouter);
 
 // ============================================
 // HEALTH CHECK ENDPOINTS
@@ -93,83 +73,72 @@ app.get('/api/health', (req, res) => {
       student: 'active',
       teacher: 'active',
     },
+    database: {
+      status: require('mongoose').connection.readyState === 1 ? 'connected' : 'disconnected',
+      name: require('mongoose').connection.name || 'N/A',
+    },
   });
 });
 
-app.get('/api/super-admin/health', (req, res) => {
-  res.status(200).json({
-    success: true,
-    message: 'Super Admin Server is running',
-    timestamp: new Date().toISOString(),
-  });
-});
-
-app.get('/api/admin/health', (req, res) => {
-  res.status(200).json({
-    success: true,
-    message: 'Admin Panel Server is running',
-    timestamp: new Date().toISOString(),
-  });
-});
-
-app.get('/api/staff/health', (req, res) => {
-  res.status(200).json({
-    success: true,
-    message: 'Staff Panel Server is running',
-    timestamp: new Date().toISOString(),
-  });
-});
-
-app.get('/api/student/health', (req, res) => {
-  res.status(200).json({
-    success: true,
-    message: 'Student Panel Server is running',
-    timestamp: new Date().toISOString(),
-  });
-});
-
-app.get('/api/teacher/health', (req, res) => {
-  res.status(200).json({
-    success: true,
-    message: 'Teacher Panel Server is running',
-    timestamp: new Date().toISOString(),
-  });
-});
+// ============================================
+// ERROR HANDLING
+// ============================================
 
 // 404 handler
 app.use((req, res) => {
   res.status(404).json({
     success: false,
     message: 'Route not found',
+    path: req.originalUrl,
   });
 });
 
-// Error handling middleware
+// Global error handler
 app.use((err, req, res, next) => {
-  console.error('Unhandled error:', err);
-  res.status(500).json({
+  console.error('❌ Unhandled error:', err);
+  res.status(err.status || 500).json({
     success: false,
-    message: 'Internal server error',
-    error: superAdminConfig.isDevelopment() ? err.message : undefined,
+    message: err.message || 'Internal server error',
+    ...(process.env.NODE_ENV === 'development' && { stack: err.stack }),
   });
 });
 
-// Server configuration - Use port 3000
-const PORT = parseInt(process.env.PORT, 10) || 3000;
+// ============================================
+// SERVER INITIALIZATION
+// ============================================
 
-app.listen(PORT, () => {
-  console.log(`🚀 Unified Server is running on port ${PORT}`);
-  console.log(`📝 Environment: ${superAdminConfig.NODE_ENV}`);
-  console.log(`\n📋 Available Services:`);
-  console.log(`   - Super Admin API: /api/super-admin/*`);
-  console.log(`   - Admin Panel API: /api/admin/*`);
-  console.log(`   - Staff Panel API: /api/staff/*`);
-  console.log(`   - Student Panel API: /api/student/*`);
-  console.log(`   - Teacher Panel API: /api/teacher/*`);
-  console.log(`   - Public Certificates: /api/certificates/*`);
-  if (superAdminConfig.isDevelopment()) {
-    console.log(`\n📋 Configuration:`, superAdminConfig.getAll());
+const PORT = parseInt(process.env.PORT, 10) || 3000;
+const NODE_ENV = process.env.NODE_ENV || 'development';
+
+/**
+ * Start the server
+ */
+const startServer = async () => {
+  try {
+    // Connect to MongoDB first
+    await connectDB();
+
+    // Start HTTP server
+    app.listen(PORT, () => {
+      console.log('\n' + '='.repeat(60));
+      console.log(`🚀 Unified Server is running on port ${PORT}`);
+      console.log(`📝 Environment: ${NODE_ENV}`);
+      console.log(`\n📋 Available Services:`);
+      console.log(`   - Super Admin API: /api/super-admin/*`);
+      console.log(`   - Admin Panel API: /api/admin/*`);
+      console.log(`   - Staff Panel API: /api/staff/*`);
+      console.log(`   - Student Panel API: /api/student/*`);
+      console.log(`   - Teacher Panel API: /api/teacher/*`);
+      console.log(`   - Health Check: /api/health`);
+      console.log('='.repeat(60) + '\n');
+    });
+  } catch (error) {
+    console.error('❌ Failed to start server:', error.message);
+    process.exit(1);
   }
-});
+};
+
+// Start the server
+startServer();
 
 module.exports = app;

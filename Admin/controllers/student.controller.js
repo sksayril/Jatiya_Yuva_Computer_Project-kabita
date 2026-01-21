@@ -16,48 +16,153 @@ const manualRegistration = async (req, res) => {
   try {
     // Get branchId - use AUTO or from middleware
     let branchId = req.branchId;
-    if (req.body.branchId && req.body.branchId !== 'AUTO') {
+    
+    // If branchId is not set from middleware, try to get from body
+    if (!branchId && req.body.branchId && req.body.branchId !== 'AUTO') {
       branchId = req.body.branchId;
     }
+    
+    // Validate branchId format (must be valid MongoDB ObjectId)
+    if (branchId && !mongoose.Types.ObjectId.isValid(branchId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid branchId format',
+      });
+    }
 
+    // Extract data from new nested structure
     const {
-      admissionDate,
-      courseName,
-      courseType,
-      studentName,
-      guardianName,
-      motherName,
-      dateOfBirth,
-      mobileNumber,
-      whatsappNumber,
-      guardianMobile,
-      email,
-      gender,
-      religion,
-      category,
-      address,
-      pincode,
-      lastQualification,
-      formNumber,
-      receiptNumber,
-      batchTime,
-      officeEntryDate,
+      admission,
+      student: studentDataFromBody,
+      family_details,
+      contact_details,
+      address: addressData,
+      education,
+      office_use,
       studentId: providedStudentId,
       status: providedStatus,
     } = req.body;
 
-    // Validation - studentName and mobileNumber are required
+    // Map nested structure to flat structure for backward compatibility
+    const admissionDate = admission?.admission_date;
+    let courseName = admission?.course?.code; // Use let instead of const to allow reassignment
+    const courseType = admission?.course?.type;
+    
+    const studentName = studentDataFromBody?.name;
+    const dateOfBirth = studentDataFromBody?.date_of_birth;
+    const gender = studentDataFromBody?.gender;
+    const religion = studentDataFromBody?.religion;
+    const category = studentDataFromBody?.caste; // Map caste to category
+    
+    const guardianName = family_details?.guardian_name;
+    const motherName = family_details?.mother_name;
+    
+    const mobileNumber = contact_details?.mobile;
+    const whatsappNumber = contact_details?.whatsapp;
+    const guardianMobile = contact_details?.guardian_contact;
+    const email = contact_details?.email;
+    
+    // Build address string from nested address object
+    const addressParts = [];
+    if (addressData?.village) addressParts.push(addressData.village);
+    if (addressData?.post_office) addressParts.push(addressData.post_office);
+    if (addressData?.district) addressParts.push(addressData.district);
+    if (addressData?.state) addressParts.push(addressData.state);
+    if (addressData?.country) addressParts.push(addressData.country);
+    const address = addressParts.join(', ');
+    const pincode = addressData?.pincode;
+    
+    const lastQualification = education?.last_qualification;
+    
+    const formNumber = office_use?.form_number;
+    const receiptNumber = office_use?.receipt_number;
+    const batchTime = office_use?.batch_time;
+    const officeEntryDate = office_use?.date;
+
+    // Validation - student.name and contact_details.mobile are required
     if (!studentName || !mobileNumber) {
       return res.status(400).json({
         success: false,
-        message: 'Missing required fields: studentName, mobileNumber',
+        message: 'Missing required fields: student.name, contact_details.mobile',
+      });
+    }
+
+    // Validate branchId
+    if (!branchId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Branch ID is required. Please ensure you are authenticated with a valid JWT token that includes branchId.',
+        debug: config.isDevelopment() ? {
+          hasReqBranchId: !!req.branchId,
+          hasBodyBranchId: !!req.body.branchId,
+          userBranchId: req.user?.branchId,
+          userExists: !!req.user,
+        } : undefined,
       });
     }
 
     // Get branch
-    const branch = await Branch.findById(branchId);
+    let branch;
+    try {
+      branch = await Branch.findById(branchId);
+    } catch (error) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid branchId format',
+        error: config.isDevelopment() ? error.message : undefined,
+      });
+    }
+    
     if (!branch) {
-      return res.status(404).json({ success: false, message: 'Branch not found' });
+      // Check if branch exists but is deleted
+      const deletedBranch = await Branch.findOne({ _id: branchId, isDeleted: true });
+      if (deletedBranch) {
+        return res.status(400).json({
+          success: false,
+          message: 'Branch exists but is marked as deleted. Please restore the branch first using SuperAdmin API.',
+          debug: config.isDevelopment() ? {
+            branchId,
+            branchName: deletedBranch.name,
+            branchCode: deletedBranch.code,
+            isDeleted: deletedBranch.isDeleted,
+            status: deletedBranch.status,
+            suggestion: 'Use POST /api/super-admin/branches/:id/update to restore the branch',
+          } : undefined,
+        });
+      }
+      
+      // Branch doesn't exist at all
+      return res.status(404).json({ 
+        success: false, 
+        message: `Branch not found with ID: ${branchId}. The branch does not exist in the database.`,
+        debug: config.isDevelopment() ? {
+          branchId,
+          branchIdType: typeof branchId,
+          isValidObjectId: mongoose.Types.ObjectId.isValid(branchId),
+          stepsToFix: [
+            '1. Login as SuperAdmin',
+            '2. Create a branch: POST /api/super-admin/branches',
+            '3. Create/Update admin with the new branchId: POST /api/super-admin/branch-admins',
+            '4. Login again as admin to get new token with correct branchId',
+          ],
+        } : undefined,
+      });
+    }
+
+    // Check if branch is deleted
+    if (branch.isDeleted) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot create student for a deleted branch',
+      });
+    }
+    
+    // Check if branch is locked
+    if (branch.status === 'LOCKED') {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot create student for a locked branch. Please unlock the branch first.',
+      });
     }
 
     // Handle course - find by name or use courseId if provided
@@ -67,17 +172,22 @@ const manualRegistration = async (req, res) => {
       course = await Course.findById(req.body.courseId);
       if (course) courseId = course._id;
     } else if (courseName) {
-      // Try to find course by name
+      // Try to find course by name (case-insensitive)
       course = await Course.findOne({
         name: { $regex: `^${courseName.trim()}$`, $options: 'i' },
       });
       if (course) {
         courseId = course._id;
+        // Update courseName to match the actual course name from database
+        courseName = course.name;
       } else {
         // Course not found - will be stored as courseName only
         console.warn(`Course "${courseName}" not found, storing as courseName only`);
       }
     }
+    
+    // Ensure courseName is set (use the provided value or empty string)
+    const finalCourseName = courseName?.trim() || '';
 
     // Handle batch - find by batchTime or use batchId if provided
     let batch = null;
@@ -166,7 +276,7 @@ const manualRegistration = async (req, res) => {
       pincode: pincode?.trim(),
       lastQualification: lastQualification?.trim(),
       courseId,
-      courseName: courseName?.trim(),
+      courseName: finalCourseName,
       courseType: courseType?.trim(),
       batchId,
       batchTime: batchTime?.trim(),
@@ -190,6 +300,14 @@ const manualRegistration = async (req, res) => {
       createdBy: 'ADMIN',
       createdById: req.user.id,
     };
+
+    // Verify we're using the correct Student model (Admin model, not SuperAdmin model)
+    // The Admin Student model should NOT have 'course' or 'fees' as required fields
+    if (config.isDevelopment()) {
+      console.log('📝 Creating student with model:', Student.modelName);
+      console.log('📝 Student data keys:', Object.keys(studentData));
+      console.log('📝 Course info:', { courseId, courseName: finalCourseName, courseType, totalFees });
+    }
 
     // Create student
     const student = await Student.create(studentData);

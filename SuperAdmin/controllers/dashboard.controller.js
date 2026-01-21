@@ -7,10 +7,12 @@ const config = require('../config/env.config');
 
 const getDashboardSummary = async (req, res) => {
   try {
-    const [totalBranches, totalStudents, totalStaff] = await Promise.all([
+    const [totalBranches, totalStudents, totalStaff, inactiveBranches, blockedAdmins] = await Promise.all([
       Branch.countDocuments({ isDeleted: false }),
       Student.countDocuments({}),
       User.countDocuments({ role: { $in: ['ADMIN', 'STAFF'] }, isActive: true }),
+      Branch.countDocuments({ status: 'LOCKED', isDeleted: false }),
+      User.countDocuments({ role: 'ADMIN', isActive: false }),
     ]);
 
     const todayStart = new Date();
@@ -59,6 +61,8 @@ const getDashboardSummary = async (req, res) => {
         todayAttendancePercentage,
         totalMonthlyIncome,
         totalDueAmount,
+        inactiveBranches,
+        blockedAdmins,
       },
     });
   } catch (error) {

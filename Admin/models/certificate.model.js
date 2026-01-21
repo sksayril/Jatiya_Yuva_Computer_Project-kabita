@@ -51,7 +51,7 @@ const certificateSchema = new mongoose.Schema(
 );
 
 certificateSchema.index({ branchId: 1, issueDate: -1 });
-certificateSchema.index({ certificateId: 1 });
+// certificateId already indexed via unique: true
 certificateSchema.index({ studentId: 1 });
 
 // Check if model already exists to avoid overwrite error

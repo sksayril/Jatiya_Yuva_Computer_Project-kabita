@@ -152,7 +152,18 @@ const resetBranchAdminPassword = async (req, res) => {
 
 const getBranchAdmins = async (req, res) => {
   try {
-    const admins = await User.find({ role: 'ADMIN' }).sort({ createdAt: -1 });
+    const { branchId } = req.query;
+    
+    // If branchId is provided, filter by branch
+    const query = { role: 'ADMIN' };
+    if (branchId) {
+      query.branchId = branchId;
+    }
+    
+    const admins = await User.find(query)
+      .populate('branchId', 'name code')
+      .sort({ createdAt: -1 });
+    
     res.status(200).json({ success: true, data: admins });
   } catch (error) {
     console.error('Get branch admins error:', error);

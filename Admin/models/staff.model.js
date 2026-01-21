@@ -89,8 +89,7 @@ const staffSchema = new mongoose.Schema(
 );
 
 staffSchema.index({ branchId: 1, role: 1 });
-staffSchema.index({ staffId: 1 });
-staffSchema.index({ email: 1 });
+// staffId and email already indexed via unique: true
 
 // Check if model already exists to avoid overwrite error
 const Staff = mongoose.models.Staff || mongoose.model('Staff', staffSchema);

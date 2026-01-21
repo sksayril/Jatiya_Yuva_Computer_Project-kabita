@@ -59,7 +59,7 @@ const paymentSchema = new mongoose.Schema(
 
 paymentSchema.index({ branchId: 1, createdAt: -1 });
 paymentSchema.index({ studentId: 1, createdAt: -1 });
-paymentSchema.index({ receiptNumber: 1 });
+// receiptNumber already indexed via unique: true
 
 // Check if model already exists to avoid overwrite error
 const Payment = mongoose.models.Payment || mongoose.model('Payment', paymentSchema);

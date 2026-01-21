@@ -77,7 +77,9 @@ Authorization: Bearer <JWT_TOKEN>
     "totalStaff": 0,
     "todayAttendancePercentage": 0,
     "totalMonthlyIncome": 0,
-    "totalDueAmount": 0
+    "totalDueAmount": 0,
+    "inactiveBranches": 0,
+    "blockedAdmins": 0
   }
 }
 ```
@@ -180,10 +182,91 @@ Authorization: Bearer <JWT_TOKEN>
 }
 ```
 
+### Lock Branch
+**Method:** `POST`  
+**URL:** `/super-admin/branches/:id/lock`  
+**Headers:** `Authorization: Bearer <JWT_TOKEN>`  
+**Description:** Locks a branch by setting its status to `LOCKED`. Locked branches are inactive and cannot be used for operations.  
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "message": "Branch locked successfully",
+  "data": {
+    "_id": "<BRANCH_ID>",
+    "name": "Dhaka Main",
+    "code": "DHK001",
+    "status": "LOCKED",
+    "isDeleted": false
+  }
+}
+```
+**Error Response (404):**
+```json
+{
+  "success": false,
+  "message": "Branch not found"
+}
+```
+
+### Unlock Branch
+**Method:** `POST`  
+**URL:** `/super-admin/branches/:id/unlock`  
+**Headers:** `Authorization: Bearer <JWT_TOKEN>`  
+**Description:** Unlocks a branch by setting its status to `ACTIVE`. Unlocked branches become active and can be used for operations.  
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "message": "Branch unlocked successfully",
+  "data": {
+    "_id": "<BRANCH_ID>",
+    "name": "Dhaka Main",
+    "code": "DHK001",
+    "status": "ACTIVE",
+    "isDeleted": false
+  }
+}
+```
+**Error Response (404):**
+```json
+{
+  "success": false,
+  "message": "Branch not found"
+}
+```
+
+### Soft Delete Branch
+**Method:** `POST`  
+**URL:** `/super-admin/branches/:id/soft-delete`  
+**Headers:** `Authorization: Bearer <JWT_TOKEN>`  
+**Description:** Soft deletes a branch by setting `isDeleted: true`. The branch is not permanently removed and can be restored later. Soft deleted branches are excluded from normal queries.  
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "message": "Branch soft deleted successfully",
+  "data": {
+    "_id": "<BRANCH_ID>",
+    "name": "Dhaka Main",
+    "code": "DHK001",
+    "isDeleted": true
+  }
+}
+```
+**Error Response (404):**
+```json
+{
+  "success": false,
+  "message": "Branch not found or already deleted"
+}
+```
+
 ### Delete Branch (Hard)
 **Method:** `POST`  
 **URL:** `/super-admin/branches/:id/delete`  
 **Headers:** `Authorization: Bearer <JWT_TOKEN>`  
+**Description:** Permanently deletes a branch from the database. This action cannot be undone.  
 **Success Response (200):**
 ```json
 {
@@ -193,6 +276,8 @@ Authorization: Bearer <JWT_TOKEN>
 ```
 
 ## Branch Admin Management (Super Admin)
+
+**Note:** Multiple admins are allowed per branch. Each branch can have multiple admin users with different email addresses.
 
 ### Create Branch Admin
 **Method:** `POST`  
@@ -207,6 +292,7 @@ Authorization: Bearer <JWT_TOKEN>
   "branchId": "<BRANCH_ID>"
 }
 ```
+**Description:** Creates a new branch admin. Multiple admins can be created for the same branch. Each admin must have a unique email address.  
 **Success Response (201):**
 ```json
 {
@@ -221,16 +307,55 @@ Authorization: Bearer <JWT_TOKEN>
   }
 }
 ```
+**Error Response (409):**
+```json
+{
+  "success": false,
+  "message": "Email already registered"
+}
+```
 
 ### Get All Branch Admins
 **Method:** `GET`  
 **URL:** `/super-admin/branch-admins`  
 **Headers:** `Authorization: Bearer <JWT_TOKEN>`  
+**Query Parameters (optional):**
+- `branchId` - Filter admins by branch ID
+
+**Examples:**
+- Get all admins: `GET /super-admin/branch-admins`
+- Get admins for specific branch: `GET /super-admin/branch-admins?branchId=<BRANCH_ID>`
+
 **Success Response (200):**
 ```json
 {
   "success": true,
-  "data": []
+  "data": [
+    {
+      "_id": "<ADMIN_ID>",
+      "name": "Branch Admin 1",
+      "email": "admin1@branch.com",
+      "role": "ADMIN",
+      "branchId": {
+        "_id": "<BRANCH_ID>",
+        "name": "Dhaka Main",
+        "code": "DHK001"
+      },
+      "isActive": true
+    },
+    {
+      "_id": "<ADMIN_ID>",
+      "name": "Branch Admin 2",
+      "email": "admin2@branch.com",
+      "role": "ADMIN",
+      "branchId": {
+        "_id": "<BRANCH_ID>",
+        "name": "Dhaka Main",
+        "code": "DHK001"
+      },
+      "isActive": true
+    }
+  ]
 }
 ```
 

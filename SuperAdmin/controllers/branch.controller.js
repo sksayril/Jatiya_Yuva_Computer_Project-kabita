@@ -150,6 +150,86 @@ const lockBranch = async (req, res) => {
   }
 };
 
+const unlockBranch = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const branch = await Branch.findOneAndUpdate(
+      { _id: id, isDeleted: false },
+      { status: 'ACTIVE' },
+      { new: true }
+    );
+
+    if (!branch) {
+      return res.status(404).json({ success: false, message: 'Branch not found' });
+    }
+
+    await logAudit({
+      userId: req.user?.id,
+      role: req.user?.role,
+      action: 'UNLOCK',
+      module: 'BRANCH',
+      ip: req.ip,
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Branch unlocked successfully',
+      data: branch,
+    });
+  } catch (error) {
+    console.error('Unlock branch error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while unlocking branch',
+      error: config.isDevelopment() ? error.message : undefined,
+    });
+  }
+};
+
+const softDeleteBranch = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const branch = await Branch.findOneAndUpdate(
+      { _id: id, isDeleted: false },
+      { isDeleted: true },
+      { new: true }
+    );
+
+    if (!branch) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Branch not found or already deleted' 
+      });
+    }
+
+    await logAudit({
+      userId: req.user?.id,
+      role: req.user?.role,
+      action: 'SOFT_DELETE',
+      module: 'BRANCH',
+      ip: req.ip,
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Branch soft deleted successfully',
+      data: {
+        _id: branch._id,
+        name: branch.name,
+        code: branch.code,
+        isDeleted: branch.isDeleted,
+      },
+    });
+  } catch (error) {
+    console.error('Soft delete branch error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while soft deleting branch',
+      error: config.isDevelopment() ? error.message : undefined,
+    });
+  }
+};
+
 const deleteBranch = async (req, res) => {
   try {
     const { id } = req.params;
@@ -185,6 +265,8 @@ module.exports = {
   getBranches,
   updateBranch,
   lockBranch,
+  unlockBranch,
+  softDeleteBranch,
   deleteBranch,
 };
 
