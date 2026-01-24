@@ -56,6 +56,22 @@ const courseSchema = new mongoose.Schema(
       required: [true, 'CreatedBy is required'],
       trim: true,
     },
+    approvalStatus: {
+      type: String,
+      enum: ['PENDING', 'APPROVED', 'REJECTED'],
+      default: 'APPROVED', // Default to APPROVED, will be set to PENDING in Admin controller
+    },
+    approvedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'SuperAdmin',
+    },
+    approvedAt: {
+      type: Date,
+    },
+    rejectionReason: {
+      type: String,
+      trim: true,
+    },
   },
   { timestamps: true }
 );

@@ -53,7 +53,7 @@ const createCourse = async (req, res) => {
     const imageUrl = imageFile ? (imageFile.location || imageFile.path) : '';
     const pdfUrl = pdfFile ? (pdfFile.location || pdfFile.path) : '';
 
-    // Create course
+    // Create course with PENDING approval status
     const course = await Course.create({
       name: name.trim(),
       description: description.trim(),
@@ -64,8 +64,9 @@ const createCourse = async (req, res) => {
       monthlyFees: Number(monthlyFees) || 0,
       imageUrl: imageUrl || 'https://via.placeholder.com/300',
       pdfUrl: pdfUrl || 'https://via.placeholder.com/document.pdf',
-      isActive: true,
+      isActive: false, // Set to false until approved by SuperAdmin
       createdBy: 'ADMIN',
+      approvalStatus: 'PENDING',
     });
 
     await logAudit({
@@ -82,8 +83,12 @@ const createCourse = async (req, res) => {
 
     res.status(201).json({
       success: true,
-      message: 'Course created successfully',
-      data: course,
+      message: 'Course created successfully. Waiting for SuperAdmin approval.',
+      data: {
+        ...course.toObject(),
+        approvalStatus: 'PENDING',
+        note: 'This course is pending approval from SuperAdmin',
+      },
     });
   } catch (error) {
     console.error('Create course error:', error);

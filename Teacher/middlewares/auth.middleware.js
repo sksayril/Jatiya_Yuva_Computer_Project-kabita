@@ -1,5 +1,5 @@
 const { verifyToken } = require('../utils/jwt');
-const Staff = require('../../Admin/models/staff.model');
+const Teacher = require('../../Admin/models/teacher.model');
 const config = require('../config/env.config');
 
 /**
@@ -45,20 +45,12 @@ const authenticateTeacher = async (req, res, next) => {
       });
     }
 
-    // Find Teacher by ID (Staff with role TEACHER)
-    const teacher = await Staff.findById(decoded.userId);
+    // Find Teacher by ID
+    const teacher = await Teacher.findById(decoded.userId);
     if (!teacher) {
       return res.status(401).json({
         success: false,
         message: 'Teacher not found',
-      });
-    }
-
-    // Verify role matches
-    if (teacher.role !== 'TEACHER') {
-      return res.status(403).json({
-        success: false,
-        message: 'Access denied. Invalid role',
       });
     }
 
@@ -79,7 +71,7 @@ const authenticateTeacher = async (req, res, next) => {
     }
 
     // Verify teacherId matches
-    if (teacher.staffId !== decoded.teacherId) {
+    if (teacher.teacherId !== decoded.teacherId) {
       return res.status(403).json({
         success: false,
         message: 'Teacher ID mismatch. Access denied',
@@ -90,7 +82,7 @@ const authenticateTeacher = async (req, res, next) => {
     req.user = {
       id: teacher._id.toString(),
       userId: teacher._id.toString(),
-      teacherId: teacher.staffId,
+      teacherId: teacher.teacherId,
       name: teacher.name,
       email: teacher.email,
       role: 'TEACHER',

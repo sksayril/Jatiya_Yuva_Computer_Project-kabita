@@ -1,4 +1,4 @@
-const Staff = require('../../Admin/models/staff.model');
+const Teacher = require('../../Admin/models/teacher.model');
 const { StudentAttendance } = require('../../Admin/models/attendance.model');
 const Result = require('../../Admin/models/result.model');
 const Batch = require('../../Admin/models/batch.model');
@@ -15,7 +15,7 @@ const getPerformance = async (req, res) => {
     const branchId = req.branchId;
     const assignedBatches = req.assignedBatches;
 
-    const teacher = await Staff.findById(teacherId).select('assignedBatches currentMonthClasses');
+    const teacher = await Teacher.findById(teacherId).select('assignedBatches currentMonthClasses');
     if (!teacher) {
       return res.status(404).json({
         success: false,
@@ -115,7 +115,7 @@ const getPerformance = async (req, res) => {
     res.status(200).json({
       success: true,
       data: {
-        teacherId: teacher.staffId,
+        teacherId: teacher.teacherId,
         currentMonth: {
           classesTaken: classesTakenCount,
         },

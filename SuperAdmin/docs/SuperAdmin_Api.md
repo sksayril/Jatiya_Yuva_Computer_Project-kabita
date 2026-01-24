@@ -581,6 +581,97 @@ https://{bucket-name}.s3.{region}.amazonaws.com/courses/{filename}
 }
 ```
 
+### Approve Course Created by Admin
+**Method:** `POST`  
+**URL:** `/super-admin/master/courses/:id/approve`  
+**Headers:** `Authorization: Bearer <JWT_TOKEN>`  
+**Description:** Approves a course created by an Admin. Sets `approvalStatus` to `APPROVED`, `isActive` to `true`, and records the approver and approval timestamp.  
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "message": "Course approved successfully",
+  "data": {
+    "_id": "<COURSE_ID>",
+    "name": "Web Development",
+    "approvalStatus": "APPROVED",
+    "isActive": true,
+    "approvedBy": "<SUPER_ADMIN_ID>",
+    "approvedAt": "2024-01-15T10:30:00.000Z"
+  }
+}
+```
+**Error Responses:**
+- `404` - Course not found
+- `400` - Course is already approved
+- `400` - Cannot approve a rejected course (must create new course)
+
+### Reject Course Created by Admin
+**Method:** `POST`  
+**URL:** `/super-admin/master/courses/:id/reject`  
+**Headers:** 
+- `Authorization: Bearer <JWT_TOKEN>`
+- `Content-Type: application/json`
+
+**Body (raw JSON):**
+```json
+{
+  "rejectionReason": "Course fees are too high. Please revise and resubmit."
+}
+```
+
+**Description:** Rejects a course created by an Admin. Sets `approvalStatus` to `REJECTED`, `isActive` to `false`, and records the rejection reason, rejector, and rejection timestamp.  
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "message": "Course rejected successfully",
+  "data": {
+    "_id": "<COURSE_ID>",
+    "name": "Web Development",
+    "approvalStatus": "REJECTED",
+    "isActive": false,
+    "approvedBy": "<SUPER_ADMIN_ID>",
+    "approvedAt": "2024-01-15T10:30:00.000Z",
+    "rejectionReason": "Course fees are too high. Please revise and resubmit."
+  }
+}
+```
+**Error Responses:**
+- `404` - Course not found
+- `400` - Rejection reason is required
+- `400` - Cannot reject an already approved course
+- `400` - Course is already rejected
+
+### Get Pending Courses
+**Method:** `GET`  
+**URL:** `/super-admin/master/courses/pending`  
+**Headers:** `Authorization: Bearer <JWT_TOKEN>`  
+**Description:** Retrieves all courses with `approvalStatus: PENDING` that are waiting for SuperAdmin approval.  
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "count": 2,
+  "data": [
+    {
+      "_id": "<COURSE_ID>",
+      "name": "Web Development",
+      "description": "Learn web development",
+      "duration": "6 months",
+      "courseCategory": "Advanced",
+      "courseFees": 5000,
+      "admissionFees": 500,
+      "monthlyFees": 1000,
+      "approvalStatus": "PENDING",
+      "isActive": false,
+      "createdBy": "ADMIN",
+      "createdAt": "2024-01-15T09:00:00.000Z"
+    }
+  ]
+}
+```
+
 ### Fee Rules
 **Method:** `POST`  
 **URL:** `/super-admin/master/fee-rules`  

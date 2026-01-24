@@ -217,10 +217,187 @@ const deleteCourse = async (req, res) => {
   }
 };
 
+/**
+ * Approve Course Created by Admin
+ * POST /api/super-admin/master/courses/:id/approve
+ */
+const approveCourse = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const course = await Course.findById(id);
+
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        message: 'Course not found',
+      });
+    }
+
+    if (course.approvalStatus === 'APPROVED') {
+      return res.status(400).json({
+        success: false,
+        message: 'Course is already approved',
+      });
+    }
+
+    if (course.approvalStatus === 'REJECTED') {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot approve a rejected course. Please create a new course or contact support.',
+      });
+    }
+
+    // Update course status
+    course.approvalStatus = 'APPROVED';
+    course.isActive = true;
+    course.approvedBy = req.user.id;
+    course.approvedAt = new Date();
+    course.rejectionReason = undefined; // Clear rejection reason if any
+    await course.save();
+
+    // Log the action
+    const { logAudit } = require('../utils/auditLogger');
+    await logAudit({
+      userId: req.user.id,
+      role: req.user.role,
+      action: 'APPROVE_COURSE',
+      module: 'COURSE',
+      ip: req.ip,
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Course approved successfully',
+      data: {
+        _id: course._id,
+        name: course.name,
+        approvalStatus: course.approvalStatus,
+        isActive: course.isActive,
+        approvedBy: course.approvedBy,
+        approvedAt: course.approvedAt,
+      },
+    });
+  } catch (error) {
+    console.error('Approve course error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while approving course',
+      error: config.isDevelopment() ? error.message : undefined,
+    });
+  }
+};
+
+/**
+ * Reject Course Created by Admin
+ * POST /api/super-admin/master/courses/:id/reject
+ */
+const rejectCourse = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { rejectionReason } = req.body;
+
+    if (!rejectionReason || rejectionReason.trim() === '') {
+      return res.status(400).json({
+        success: false,
+        message: 'Rejection reason is required',
+      });
+    }
+
+    const course = await Course.findById(id);
+
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        message: 'Course not found',
+      });
+    }
+
+    if (course.approvalStatus === 'APPROVED') {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot reject an already approved course',
+      });
+    }
+
+    if (course.approvalStatus === 'REJECTED') {
+      return res.status(400).json({
+        success: false,
+        message: 'Course is already rejected',
+      });
+    }
+
+    // Update course status
+    course.approvalStatus = 'REJECTED';
+    course.isActive = false;
+    course.approvedBy = req.user.id;
+    course.approvedAt = new Date();
+    course.rejectionReason = rejectionReason.trim();
+    await course.save();
+
+    // Log the action
+    const { logAudit } = require('../utils/auditLogger');
+    await logAudit({
+      userId: req.user.id,
+      role: req.user.role,
+      action: 'REJECT_COURSE',
+      module: 'COURSE',
+      ip: req.ip,
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Course rejected successfully',
+      data: {
+        _id: course._id,
+        name: course.name,
+        approvalStatus: course.approvalStatus,
+        isActive: course.isActive,
+        approvedBy: course.approvedBy,
+        approvedAt: course.approvedAt,
+        rejectionReason: course.rejectionReason,
+      },
+    });
+  } catch (error) {
+    console.error('Reject course error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while rejecting course',
+      error: config.isDevelopment() ? error.message : undefined,
+    });
+  }
+};
+
+/**
+ * Get Pending Courses (for approval)
+ * GET /api/super-admin/master/courses/pending
+ */
+const getPendingCourses = async (req, res) => {
+  try {
+    const courses = await Course.find({ approvalStatus: 'PENDING' })
+      .sort({ createdAt: -1 });
+
+    res.status(200).json({
+      success: true,
+      count: courses.length,
+      data: courses,
+    });
+  } catch (error) {
+    console.error('Get pending courses error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while fetching pending courses',
+      error: config.isDevelopment() ? error.message : undefined,
+    });
+  }
+};
+
 module.exports = {
   createCourse,
   getCourses,
   updateCourse,
   deleteCourse,
+  approveCourse,
+  rejectCourse,
+  getPendingCourses,
 };
 

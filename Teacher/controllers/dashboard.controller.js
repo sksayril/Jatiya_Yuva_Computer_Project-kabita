@@ -1,4 +1,4 @@
-const Staff = require('../../Admin/models/staff.model');
+const Teacher = require('../../Admin/models/teacher.model');
 const Batch = require('../../Admin/models/batch.model');
 const Student = require('../../Admin/models/student.model');
 const { StudentAttendance } = require('../../Admin/models/attendance.model');
@@ -17,7 +17,7 @@ const getDashboardSummary = async (req, res) => {
     const assignedBatches = req.assignedBatches;
 
     // Get teacher details
-    const teacher = await Staff.findById(teacherId).populate('assignedBatches', 'name timeSlot courseId isActive');
+    const teacher = await Teacher.findById(teacherId).populate('assignedBatches', 'name timeSlot courseId isActive');
     if (!teacher) {
       return res.status(404).json({
         success: false,

@@ -49,6 +49,7 @@ router.use('/batches', batchRoutes);
 
 // Staff/Teacher Management
 router.use('/staff', staffRoutes);
+router.use('/teachers', require('./routes/teacher.routes'));
 
 // Exams
 router.use('/exams', examRoutes);

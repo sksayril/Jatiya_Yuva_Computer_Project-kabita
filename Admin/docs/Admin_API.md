@@ -232,8 +232,7 @@ Authorization: Bearer <JWT_TOKEN>
     "loginCredentials": {
       "email": "dhk001-2024-001@dhk001.edu",
       "password": "STU001"
-    },
-    "qrCode": "data:image/png;base64,..."
+    }
   }
 }
 ```
@@ -270,7 +269,7 @@ Authorization: Bearer <JWT_TOKEN>
 ---
 
 ### Approve Pending Student
-**Method:** `PATCH`  
+**Method:** `POST`  
 **URL:** `/api/admin/students/:id/approve`  
 **Headers:** `Authorization: Bearer <JWT_TOKEN>`
 
@@ -295,7 +294,7 @@ Authorization: Bearer <JWT_TOKEN>
 ---
 
 ### Drop Student
-**Method:** `PATCH`  
+**Method:** `POST`  
 **URL:** `/api/admin/students/:id/drop`  
 **Headers:** `Authorization: Bearer <JWT_TOKEN>`
 
@@ -312,10 +311,70 @@ Authorization: Bearer <JWT_TOKEN>
 }
 ```
 
+**Error Responses:**
+- `404` - Student not found
+
+---
+
+### Reactivate Dropped Student
+**Method:** `POST`  
+**URL:** `/api/admin/students/:id/reactivate`  
+**Headers:** 
+- `Authorization: Bearer <JWT_TOKEN>`
+- `Content-Type: application/json`
+
+**Body (raw JSON):**
+```json
+{
+  "batchId": "<BATCH_ID>"
+}
+```
+
+**Note:** `batchId` is optional if the student had a previous batch that is still active. If the previous batch is inactive or the student had no batch, `batchId` is required.
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "message": "Student reactivated successfully",
+  "data": {
+    "_id": "<STUDENT_ID>",
+    "studentId": "DHK001-2024-001",
+    "studentName": "John Doe",
+    "status": "ACTIVE",
+    "batchId": "<BATCH_ID>",
+    "totalFees": 5000,
+    "paidAmount": 2000,
+    "dueAmount": 3000,
+    "loginCredentials": {
+      "email": "dhk001-2024-001@dhk001.edu",
+      "password": "STU001"
+    }
+  }
+}
+```
+
+**Error Responses:**
+- `404` - Student not found
+- `400` - Student is not in DROPPED status
+- `400` - Invalid or inactive branch
+- `400` - Batch not found or inactive
+- `400` - Student's previous batch is inactive (provide new batchId)
+- `400` - batchId is required to reactivate student
+
+**Features:**
+- ✅ Validates branch (branch must be active and not deleted)
+- ✅ Updates student status from DROPPED to ACTIVE
+- ✅ Resumes fees & attendance (recalculates due amount)
+- ✅ Assigns batch (new batch or restores to previous active batch)
+- ✅ Enables login (generates credentials if missing)
+- ✅ Updates batch student count
+- ✅ Logs action in audit log
+
 ---
 
 ### Change Student Batch
-**Method:** `PATCH`  
+**Method:** `POST`  
 **URL:** `/api/admin/students/:id/change-batch`  
 **Headers:** 
 - `Authorization: Bearer <JWT_TOKEN>`
@@ -873,9 +932,9 @@ Authorization: Bearer <JWT_TOKEN>
 
 ---
 
-## Staff/Teacher Management
+## Staff
 
-### Create Staff/Teacher
+### Create Staff
 **Method:** `POST`  
 **URL:** `/api/admin/staff`  
 **Headers:** 
@@ -888,21 +947,17 @@ Authorization: Bearer <JWT_TOKEN>
   "name": "Staff Name",
   "email": "staff@branch.com",
   "mobile": "1234567890",
-  "role": "TEACHER",
-  "assignedBatches": ["<BATCH_ID_1>", "<BATCH_ID_2>"],
-  "salaryType": "PER_CLASS",
-  "salaryRate": 300
+  "salaryType": "MONTHLY_FIXED",
+  "salaryRate": 15000
 }
 ```
 
-**Role Options:**
-- `STAFF` - Staff member
-- `TEACHER` - Teacher
-
-**Salary Type Options:**
-- `PER_CLASS` - Payment per class taken
-- `MONTHLY_FIXED` - Fixed monthly salary
-- `HOURLY` - Hourly rate
+**Required Fields:**
+- `name` - Staff name
+- `email` - Email address (must be unique)
+- `mobile` - Mobile number
+- `salaryType` - Must be `MONTHLY_FIXED` (only allowed value)
+- `salaryRate` - Monthly salary amount (number)
 
 **Success Response (201):**
 ```json
@@ -911,24 +966,37 @@ Authorization: Bearer <JWT_TOKEN>
   "message": "Staff created successfully",
   "data": {
     "_id": "<STAFF_ID>",
-    "staffId": "DHK001-TCH-001",
+    "staffId": "DHK001-STF-001",
     "name": "Staff Name",
     "email": "staff@branch.com",
-    "role": "TEACHER",
-    "salaryType": "PER_CLASS",
-    "salaryRate": 300,
+    "mobile": "1234567890",
+    "role": "STAFF",
+    "salaryType": "MONTHLY_FIXED",
+    "salaryRate": 15000,
     "currentMonthClasses": 0,
     "currentMonthSalary": 0,
-    "qrCode": "data:image/png;base64,...",
     "loginCredentials": {
       "email": "staff@branch.com",
       "password": "STF001"
     },
     "isActive": true,
-    ...
+    "createdAt": "2026-01-24T10:00:00.000Z",
+    "updatedAt": "2026-01-24T10:00:00.000Z"
   }
 }
 ```
+
+**Error Responses:**
+- `400` - Missing required fields
+- `400` - Invalid salaryType (must be MONTHLY_FIXED)
+- `409` - Email already registered (in Staff or Teacher model)
+- `404` - Branch not found
+
+**Notes:**
+- This endpoint creates STAFF members only. To create teachers, use `/api/admin/teachers`
+- Staff ID is automatically generated in format: `BRANCH_CODE-STF-SEQUENCE` (e.g., `DHK001-STF-001`)
+- Login credentials are automatically generated (password format: `STF{SEQUENCE}`)
+- Email is checked against both Staff and Teacher models to ensure uniqueness
 
 ---
 
@@ -968,6 +1036,247 @@ Authorization: Bearer <JWT_TOKEN>
   ]
 }
 ```
+
+---
+
+### Create Teacher (Dedicated Endpoint)
+**Method:** `POST`  
+**URL:** `/api/admin/teachers`  
+**Headers:** 
+- `Authorization: Bearer <JWT_TOKEN>`
+- `Content-Type: application/json`
+
+**Description:** Creates a new teacher with automatic role assignment. This endpoint is specifically designed for teacher creation with teacher-specific validations. Batches can be assigned later if not provided during creation.
+
+**Body (raw JSON):**
+```json
+{
+  "name": "Teacher Name",
+  "email": "teacher@branch.com",
+  "mobile": "1234567890",
+  "assignedBatches": ["<BATCH_ID_1>", "<BATCH_ID_2>"],
+  "salaryType": "PER_CLASS",
+  "salaryRate": 300
+}
+```
+
+**Required Fields:**
+- `name` - Teacher's full name
+- `email` - Teacher's email address (must be unique)
+- `mobile` - Teacher's mobile number
+- `salaryType` - PER_CLASS | MONTHLY_FIXED | HOURLY
+- `salaryRate` - Salary rate (number)
+
+**Optional Fields:**
+- `assignedBatches` - Array of batch IDs (can be assigned later if not provided)
+
+**Salary Type Options:**
+- `PER_CLASS` - Payment per class taken
+- `MONTHLY_FIXED` - Fixed monthly salary
+- `HOURLY` - Hourly rate
+
+**Success Response (201):**
+```json
+{
+  "success": true,
+  "message": "Teacher created successfully",
+  "data": {
+    "_id": "<TEACHER_ID>",
+    "teacherId": "DHK001-TCH-001",
+    "name": "Teacher Name",
+    "email": "teacher@branch.com",
+    "mobile": "1234567890",
+    "assignedBatches": ["<BATCH_ID_1>", "<BATCH_ID_2>"],
+    "salaryType": "PER_CLASS",
+    "salaryRate": 300,
+    "loginCredentials": {
+      "email": "teacher@branch.com",
+      "password": "TCH001"
+    },
+    "isActive": true,
+    "createdAt": "2024-01-15T10:30:00.000Z"
+  }
+}
+```
+
+**Error Responses:**
+- `400` - Missing required fields
+- `400` - assignedBatches must be an array with at least one batch ID if provided
+- `400` - Invalid salaryType
+- `400` - One or more batches not found, inactive, or belong to different branch
+- `409` - Email already registered
+- `404` - Branch not found
+
+**Notes:**
+- Teacher ID is auto-generated in format: `BRANCH_CODE-TCH-SEQUENCE` (e.g., `DHK001-TCH-001`)
+- Login credentials are auto-generated (password format: `TCH{SEQUENCE}`)
+- `assignedBatches` is optional - batches can be assigned during creation or later
+- If batches are provided, they are automatically updated with the teacher's ID
+- All batches must be active and belong to the same branch (if provided)
+- Teachers are stored in a separate `Teacher` model (not in Staff model)
+
+---
+
+### Get All Teachers
+**Method:** `GET`  
+**URL:** `/api/admin/teachers`  
+**Headers:** `Authorization: Bearer <JWT_TOKEN>`
+
+**Query Parameters (optional):**
+- `isActive` - Filter by active status: `true`, `false`
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "count": 2,
+  "data": [
+    {
+      "_id": "<TEACHER_ID>",
+      "teacherId": "DHK001-TCH-001",
+      "name": "Teacher Name",
+      "email": "teacher@branch.com",
+      "mobile": "1234567890",
+      "assignedBatches": [
+        {
+          "_id": "<BATCH_ID>",
+          "name": "Morning Batch",
+          "timeSlot": "9:00 AM - 11:00 AM",
+          "courseId": "<COURSE_ID>"
+        }
+      ],
+      "salaryType": "PER_CLASS",
+      "salaryRate": 300,
+      "currentMonthClasses": 20,
+      "currentMonthSalary": 6000,
+      "isActive": true,
+      "createdAt": "2024-01-15T10:30:00.000Z"
+    }
+  ]
+}
+```
+
+---
+
+### Get Teacher by ID
+**Method:** `GET`  
+**URL:** `/api/admin/teachers/:id`  
+**Headers:** `Authorization: Bearer <JWT_TOKEN>`
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "_id": "<TEACHER_ID>",
+    "teacherId": "DHK001-TCH-001",
+    "name": "Teacher Name",
+    "email": "teacher@branch.com",
+    "mobile": "1234567890",
+    "assignedBatches": [
+      {
+        "_id": "<BATCH_ID>",
+        "name": "Morning Batch",
+        "timeSlot": "9:00 AM - 11:00 AM",
+        "courseId": "<COURSE_ID>"
+      }
+    ],
+    "salaryType": "PER_CLASS",
+    "salaryRate": 300,
+    "currentMonthClasses": 20,
+    "currentMonthSalary": 6000,
+    "isActive": true,
+    "branchId": {
+      "_id": "<BRANCH_ID>",
+      "name": "Dhaka Main",
+      "code": "DHK001"
+    },
+    "createdAt": "2024-01-15T10:30:00.000Z",
+    "updatedAt": "2024-01-15T10:30:00.000Z"
+  }
+}
+```
+
+**Error Responses:**
+- `404` - Teacher not found
+
+---
+
+### Update Teacher
+**Method:** `POST`  
+**URL:** `/api/admin/teachers/:id/update`  
+**Headers:** 
+- `Authorization: Bearer <JWT_TOKEN>`
+- `Content-Type: application/json`
+
+**Body (raw JSON, all fields optional):**
+```json
+{
+  "name": "Updated Teacher Name",
+  "email": "updated.teacher@branch.com",
+  "mobile": "9876543210",
+  "assignedBatches": ["<BATCH_ID_1>", "<BATCH_ID_2>"],
+  "salaryType": "MONTHLY_FIXED",
+  "salaryRate": 15000,
+  "isActive": true
+}
+```
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "message": "Teacher updated successfully",
+  "data": {
+    "_id": "<TEACHER_ID>",
+    "teacherId": "DHK001-TCH-001",
+    "name": "Updated Teacher Name",
+    "email": "updated.teacher@branch.com",
+    "mobile": "9876543210",
+    "assignedBatches": ["<BATCH_ID_1>", "<BATCH_ID_2>"],
+    "salaryType": "MONTHLY_FIXED",
+    "salaryRate": 15000,
+    "isActive": true,
+    ...
+  }
+}
+```
+
+**Error Responses:**
+- `404` - Teacher not found
+- `400` - Invalid salaryType
+- `400` - One or more batches not found, inactive, or belong to different branch
+- `409` - Email already registered
+
+**Notes:**
+- All fields are optional - only provided fields will be updated
+- When updating `assignedBatches`, batches are automatically updated with teacher assignment
+- Old batch assignments are removed and new ones are added
+- Email update also updates login credentials email
+
+---
+
+### Delete Teacher
+**Method:** `POST`  
+**URL:** `/api/admin/teachers/:id/delete`  
+**Headers:** `Authorization: Bearer <JWT_TOKEN>`
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "message": "Teacher deleted successfully"
+}
+```
+
+**Error Responses:**
+- `404` - Teacher not found
+
+**Notes:**
+- Teacher is permanently deleted from the database
+- Teacher assignment is automatically removed from all assigned batches
+- This action cannot be undone
+- All actions are logged in audit log
 
 ---
 

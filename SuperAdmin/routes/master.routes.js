@@ -6,7 +6,7 @@ const {
   createExamRules,
   createCertificateTemplate,
 } = require('../controllers/master.controller');
-const { createCourse, getCourses, updateCourse, deleteCourse } = require('../controllers/course.controller');
+const { createCourse, getCourses, updateCourse, deleteCourse, approveCourse, rejectCourse, getPendingCourses } = require('../controllers/course.controller');
 const { authenticateSuperAdmin, authorizeRoles } = require('../middlewares/auth.middleware');
 const { uploadCourseFiles, handleS3UploadError } = require('../utils/upload');
 
@@ -32,6 +32,24 @@ router.post(
   authenticateSuperAdmin,
   authorizeRoles(['SUPER_ADMIN']),
   deleteCourse
+);
+router.post(
+  '/courses/:id/approve',
+  authenticateSuperAdmin,
+  authorizeRoles(['SUPER_ADMIN']),
+  approveCourse
+);
+router.post(
+  '/courses/:id/reject',
+  authenticateSuperAdmin,
+  authorizeRoles(['SUPER_ADMIN']),
+  rejectCourse
+);
+router.get(
+  '/courses/pending',
+  authenticateSuperAdmin,
+  authorizeRoles(['SUPER_ADMIN']),
+  getPendingCourses
 );
 router.post('/fee-rules', authenticateSuperAdmin, authorizeRoles(['SUPER_ADMIN']), createFeeRules);
 router.post(

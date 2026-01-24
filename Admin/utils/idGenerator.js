@@ -45,6 +45,28 @@ const generateStaffId = async (branchCode, role, Staff) => {
 };
 
 /**
+ * Generate unique Teacher ID
+ * Format: BRANCH_CODE + TCH + SEQUENCE (e.g., DHK001-TCH-001)
+ */
+const generateTeacherId = async (branchCode, Teacher) => {
+  const prefix = `${branchCode}-TCH-`;
+  
+  const lastTeacher = await Teacher.findOne({
+    teacherId: { $regex: `^${prefix}` },
+  })
+    .sort({ teacherId: -1 })
+    .select('teacherId');
+  
+  let sequence = 1;
+  if (lastTeacher && lastTeacher.teacherId) {
+    const lastSeq = parseInt(lastTeacher.teacherId.split('-')[2] || '0', 10);
+    sequence = lastSeq + 1;
+  }
+  
+  return `${prefix}${String(sequence).padStart(3, '0')}`;
+};
+
+/**
  * Generate unique Receipt Number
  * Format: BRANCH_CODE + YEAR + MONTH + SEQUENCE
  */
@@ -96,6 +118,7 @@ const generateCertificateId = async (Certificate) => {
 module.exports = {
   generateStudentId,
   generateStaffId,
+  generateTeacherId,
   generateReceiptNumber,
   generateCertificateId,
 };

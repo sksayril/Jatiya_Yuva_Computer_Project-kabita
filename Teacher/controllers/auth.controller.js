@@ -1,4 +1,4 @@
-const Staff = require('../../Admin/models/staff.model');
+const Teacher = require('../../Admin/models/teacher.model');
 const { generateToken } = require('../utils/jwt');
 const bcrypt = require('bcrypt');
 const config = require('../config/env.config');
@@ -31,14 +31,12 @@ const login = async (req, res) => {
     // Find teacher by teacherId or email
     let teacher = null;
     if (teacherId) {
-      teacher = await Staff.findOne({
-        staffId: teacherId.toUpperCase().trim(),
-        role: 'TEACHER',
+      teacher = await Teacher.findOne({
+        teacherId: teacherId.toUpperCase().trim(),
       });
     } else if (email) {
-      teacher = await Staff.findOne({
+      teacher = await Teacher.findOne({
         email: email.toLowerCase().trim(),
-        role: 'TEACHER',
       });
     }
 
@@ -76,20 +74,12 @@ const login = async (req, res) => {
       });
     }
 
-    // Verify role
-    if (teacher.role !== 'TEACHER') {
-      return res.status(403).json({
-        success: false,
-        message: 'Access denied. Teacher role required',
-      });
-    }
-
     // Generate JWT token with branchId and teacherId
     const payload = {
       userId: teacher._id.toString(),
       role: 'TEACHER',
       branchId: teacher.branchId.toString(),
-      teacherId: teacher.staffId,
+      teacherId: teacher.teacherId,
     };
 
     const token = generateToken(payload);
@@ -101,7 +91,7 @@ const login = async (req, res) => {
         token,
         role: 'TEACHER',
         branchId: teacher.branchId.toString(),
-        teacherId: teacher.staffId,
+        teacherId: teacher.teacherId,
         name: teacher.name,
         email: teacher.email,
         assignedBatches: teacher.assignedBatches || [],
