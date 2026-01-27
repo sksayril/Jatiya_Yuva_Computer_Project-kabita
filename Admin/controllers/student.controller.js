@@ -439,7 +439,7 @@ const approveStudent = async (req, res) => {
 
 /**
  * Drop Student
- * POST /api/admin/students/:id/drop
+ * PATCH /api/admin/students/:id/drop
  */
 const dropStudent = async (req, res) => {
   try {
@@ -499,10 +499,9 @@ const reactivateStudent = async (req, res) => {
     const { id } = req.params;
     const { batchId } = req.body;
 
-    // Validate branch (already done by middleware, but double-check)
-    const Branch = require('../../SuperAdmin/models/branch.model');
-    const branch = await Branch.findById(branchId);
-    if (!branch || branch.isDeleted || branch.status === 'LOCKED') {
+    // Validate branch
+    const branch = await Branch.findOne({ _id: branchId, isDeleted: false });
+    if (!branch) {
       return res.status(400).json({
         success: false,
         message: 'Invalid or inactive branch',
@@ -511,105 +510,81 @@ const reactivateStudent = async (req, res) => {
 
     // Find student
     const student = await Student.findOne({ _id: id, branchId });
-
     if (!student) {
-      return res.status(404).json({
-        success: false,
-        message: 'Student not found',
-      });
+      return res.status(404).json({ success: false, message: 'Student not found' });
     }
 
     // Check if student is in DROPPED status
     if (student.status !== 'DROPPED') {
       return res.status(400).json({
         success: false,
-        message: `Student is not in DROPPED status. Current status: ${student.status}`,
+        message: 'Student is not in DROPPED status',
       });
     }
 
-    const oldData = {
-      status: student.status,
-      batchId: student.batchId?.toString(),
-    };
-
-    // Update status to ACTIVE
-    student.status = 'ACTIVE';
-
-    // Assign batch if provided
-    if (batchId) {
-      const newBatch = await Batch.findOne({ _id: batchId, branchId, isActive: true });
-      if (!newBatch) {
-        return res.status(404).json({
-          success: false,
-          message: 'Batch not found or inactive',
-        });
-      }
-
-      // Update batch counts
-      if (student.batchId && student.batchId.toString() !== batchId) {
-        // Remove from old batch
-        await Batch.findByIdAndUpdate(student.batchId, {
-          $inc: { currentStudents: -1 },
-        });
-      }
-      // Add to new batch
-      student.batchId = batchId;
-      await Batch.findByIdAndUpdate(batchId, {
-        $inc: { currentStudents: 1 },
-      });
-    } else if (student.batchId) {
-      // If no new batch provided, restore to existing batch
-      const existingBatch = await Batch.findById(student.batchId);
-      if (existingBatch && existingBatch.isActive) {
-        await Batch.findByIdAndUpdate(student.batchId, {
-          $inc: { currentStudents: 1 },
-        });
+    // Determine which batch to use
+    let assignedBatchId = batchId;
+    
+    if (!assignedBatchId && student.batchId) {
+      // Try to reuse previous batch if it's still active
+      const previousBatch = await Batch.findById(student.batchId);
+      if (previousBatch && previousBatch.isActive) {
+        assignedBatchId = student.batchId;
       } else {
-        // Existing batch is inactive, need to provide new batch
         return res.status(400).json({
           success: false,
-          message: 'Student\'s previous batch is inactive. Please provide a new batchId',
+          message: "Student's previous batch is inactive. Provide a new batchId.",
         });
       }
-    } else {
-      // No batch assigned, need to provide one
+    }
+
+    if (!assignedBatchId) {
       return res.status(400).json({
         success: false,
         message: 'batchId is required to reactivate student',
       });
     }
 
-    // Resume fees - recalculate due amount
-    const dueAmount = Math.max(0, student.totalFees - (student.paidAmount || 0));
-    student.dueAmount = dueAmount;
+    // Validate new batch
+    const batch = await Batch.findOne({ _id: assignedBatchId, branchId });
+    if (!batch) {
+      return res.status(404).json({
+        success: false,
+        message: 'Batch not found or inactive',
+      });
+    }
 
-    // Enable login - ensure login credentials exist
-    if (!student.loginCredentials || !student.loginCredentials.email) {
-      // Generate login credentials if missing
-      const loginEmail = `${student.studentId.toLowerCase()}@${branch?.code?.toLowerCase() || 'edu'}.edu`;
-      const password = `STU${student.studentId.split('-')[2] || Math.random().toString(36).substring(7)}`;
-      student.loginCredentials = {
-        email: loginEmail,
-        password,
-      };
+    if (!batch.isActive) {
+      return res.status(400).json({
+        success: false,
+        message: 'Selected batch is inactive',
+      });
+    }
+
+    // Update student status to ACTIVE
+    student.status = 'ACTIVE';
+    student.batchId = assignedBatchId;
+    
+    // Reset fees tracking if needed
+    if (!student.totalFees) {
+      student.totalFees = batch.monthlyFee || 0;
     }
 
     await student.save();
 
-    // Log the action
+    // Increment batch student count
+    await Batch.findByIdAndUpdate(assignedBatchId, { $inc: { currentStudents: 1 } });
+
+    // Log audit
     await logAudit({
       branchId,
       userId: req.user.id,
       role: req.user.role,
-      action: 'REACTIVATE',
+      action: 'REACTIVATE_STUDENT',
       module: 'STUDENT',
       entityId: student._id,
-      oldData,
-      newData: {
-        status: 'ACTIVE',
-        batchId: student.batchId?.toString(),
-        dueAmount: student.dueAmount,
-      },
+      oldData: { status: 'DROPPED' },
+      newData: { status: 'ACTIVE', batchId: assignedBatchId },
       ip: req.ip,
       userAgent: req.get('user-agent'),
     });
@@ -620,13 +595,16 @@ const reactivateStudent = async (req, res) => {
       data: {
         _id: student._id,
         studentId: student.studentId,
-        studentName: student.studentName,
+        studentName: student.studentName || student.name,
         status: student.status,
         batchId: student.batchId,
         totalFees: student.totalFees,
-        paidAmount: student.paidAmount,
-        dueAmount: student.dueAmount,
-        loginCredentials: student.loginCredentials,
+        paidAmount: student.paidAmount || 0,
+        dueAmount: (student.totalFees || 0) - (student.paidAmount || 0),
+        loginCredentials: {
+          email: student.email,
+          password: student.password,
+        },
       },
     });
   } catch (error) {

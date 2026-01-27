@@ -243,31 +243,6 @@ Authorization: Bearer <JWT_TOKEN>
 
 ---
 
-### Scan Form Image (OCR Placeholder)
-**Method:** `POST`  
-**URL:** `/api/admin/students/scan-form`  
-**Headers:** `Authorization: Bearer <JWT_TOKEN>`  
-**Body (form-data):**
-- `formImage` (file) - Image file of the registration form
-
-**Success Response (200):**
-```json
-{
-  "success": true,
-  "message": "Form scanned successfully (OCR placeholder)",
-  "data": {
-    "name": "Extracted Name",
-    "mobile": "1234567890",
-    "address": "Extracted Address",
-    "course": "DCA",
-    "date": "2024-01-15T00:00:00.000Z"
-  },
-  "note": "This is a placeholder. Integrate actual OCR service for production."
-}
-```
-
----
-
 ### Approve Pending Student
 **Method:** `POST`  
 **URL:** `/api/admin/students/:id/approve`  
@@ -824,11 +799,17 @@ Authorization: Bearer <JWT_TOKEN>
   "monthlyFee": 1000,
   "isKidsBatch": false,
   "discountPercentage": 0,
+  "batchType": "OFFLINE",
   "teacherId": "<TEACHER_ID>",
   "courseId": "<COURSE_ID>",
   "maxStudents": 30
 }
 ```
+
+**Batch Type Options:**
+- `OFFLINE` - Classroom-based learning
+- `ONLINE` - Online/virtual learning
+- `HYBRID` - Mix of offline and online classes
 
 **Success Response (201):**
 ```json
@@ -842,12 +823,23 @@ Authorization: Bearer <JWT_TOKEN>
     "monthlyFee": 1000,
     "isKidsBatch": false,
     "discountPercentage": 0,
-    "teacherId": "<TEACHER_ID>",
-    "courseId": "<COURSE_ID>",
+    "batchType": "OFFLINE",
+    "courseId": {
+      "_id": "<COURSE_ID>",
+      "name": "DCA",
+      "courseCategory": "Basic"
+    },
+    "teacherId": {
+      "_id": "<TEACHER_ID>",
+      "name": "Teacher Name",
+      "email": "teacher@branch.com"
+    },
     "maxStudents": 30,
     "currentStudents": 0,
     "isActive": true,
-    ...
+    "branchId": "<BRANCH_ID>",
+    "createdAt": "2026-01-27T09:28:12.485Z",
+    "updatedAt": "2026-01-27T09:28:12.485Z"
   }
 }
 ```
@@ -896,9 +888,49 @@ Authorization: Bearer <JWT_TOKEN>
 
 ---
 
-### Update Batch
-**Method:** `PATCH`  
+### Get Batch by ID
+**Method:** `GET`  
 **URL:** `/api/admin/batches/:id`  
+**Headers:** `Authorization: Bearer <JWT_TOKEN>`
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "_id": "<BATCH_ID>",
+    "name": "Morning Batch",
+    "timeSlot": "9:00 AM - 11:00 AM",
+    "monthlyFee": 1000,
+    "isKidsBatch": false,
+    "discountPercentage": 0,
+    "courseId": {
+      "_id": "<COURSE_ID>",
+      "name": "DCA",
+      "courseCategory": "Basic"
+    },
+    "teacherId": {
+      "_id": "<TEACHER_ID>",
+      "name": "Teacher Name",
+      "email": "teacher@branch.com"
+    },
+    "currentStudents": 25,
+    "maxStudents": 30,
+    "isActive": true,
+    "createdAt": "2024-01-15T10:00:00.000Z",
+    "updatedAt": "2024-01-15T10:00:00.000Z"
+  }
+}
+```
+
+**Error Responses:**
+- `404` - Batch not found
+
+---
+
+### Update Batch
+**Method:** `POST`  
+**URL:** `/api/admin/batches/:id/update`  
 **Headers:** 
 - `Authorization: Bearer <JWT_TOKEN>`
 - `Content-Type: application/json`
@@ -925,12 +957,123 @@ Authorization: Bearer <JWT_TOKEN>
   "data": {
     "_id": "<BATCH_ID>",
     "name": "Updated Batch Name",
-    ...
+    "timeSlot": "10:00 AM - 12:00 PM",
+    "monthlyFee": 1200,
+    "isKidsBatch": false,
+    "discountPercentage": 0,
+    "batchType": "OFFLINE",
+    "courseId": {
+      "_id": "<COURSE_ID>",
+      "name": "DCA",
+      "courseCategory": "Basic"
+    },
+    "teacherId": {
+      "_id": "<NEW_TEACHER_ID>",
+      "name": "Updated Teacher Name",
+      "email": "teacher@branch.com"
+    },
+    "maxStudents": 35,
+    "currentStudents": 25,
+    "isActive": true,
+    "branchId": "<BRANCH_ID>",
+    "createdAt": "2024-01-15T10:00:00.000Z",
+    "updatedAt": "2024-01-27T09:30:00.000Z"
   }
 }
 ```
 
 ---
+
+### Delete Batch
+**Method:** `POST`  
+**URL:** `/api/admin/batches/:id/delete`  
+**Headers:** `Authorization: Bearer <JWT_TOKEN>`
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "message": "Batch deleted successfully"
+}
+```
+
+**Error Responses:**
+- `404` - Batch not found
+- `400` - Cannot delete batch with active students
+
+**Notes:**
+- Batch must have no active students to be deleted
+- This action cannot be undone
+- All actions are logged in audit log
+
+---
+
+### Assign Teacher to Batch
+**Method:** `POST`  
+**URL:** `/api/admin/batches/:id/assign-teacher`  
+**Headers:** 
+- `Authorization: Bearer <JWT_TOKEN>`
+- `Content-Type: application/json`
+
+**Description:** Assigns a teacher to a batch. This endpoint is accessible to both ADMIN and STAFF roles. If a teacher is already assigned to the batch, the old assignment is replaced with the new one.
+
+**Body (raw JSON):**
+```json
+{
+  "teacherId": "<TEACHER_ID>",
+  "course": "<COURSE_ID>"
+}
+```
+
+**Required Fields:**
+- `teacherId` - Teacher ID to assign to the batch
+- `course` - Course ID to validate batch course matches
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "message": "Teacher assigned to batch successfully",
+  "data": {
+    "_id": "<BATCH_ID>",
+    "name": "Morning Batch",
+    "timeSlot": "9:00 AM - 11:00 AM",
+    "monthlyFee": 1000,
+    "isKidsBatch": false,
+    "discountPercentage": 0,
+    "batchType": "OFFLINE",
+    "courseId": {
+      "_id": "<COURSE_ID>",
+      "name": "DCA",
+      "courseCategory": "Basic"
+    },
+    "teacherId": {
+      "_id": "<TEACHER_ID>",
+      "name": "Teacher Name",
+      "email": "teacher@branch.com"
+    },
+    "maxStudents": 30,
+    "currentStudents": 25,
+    "isActive": true,
+    "branchId": "<BRANCH_ID>",
+    "createdAt": "2024-01-15T10:00:00.000Z",
+    "updatedAt": "2024-01-27T10:30:00.000Z"
+  }
+}
+```
+
+**Error Responses:**
+- `400` - Missing required fields: teacherId, course
+- `400` - Course ID does not match batch course
+- `404` - Batch not found
+- `404` - Teacher not found
+
+**Notes:**
+- If a teacher is already assigned to the batch, the old teacher is automatically unassigned
+- The old teacher's `assignedBatches` array is updated to remove this batch
+- The new teacher's `assignedBatches` array is updated to include this batch
+- Both ADMIN and STAFF roles can use this endpoint
+- All actions are logged in audit log
 
 ## Staff
 
@@ -1016,26 +1159,137 @@ Authorization: Bearer <JWT_TOKEN>
   "data": [
     {
       "_id": "<STAFF_ID>",
-      "staffId": "DHK001-TCH-001",
+      "staffId": "DHK001-STF-001",
       "name": "Staff Name",
       "email": "staff@branch.com",
-      "role": "TEACHER",
-      "assignedBatches": [
-        {
-          "_id": "<BATCH_ID>",
-          "name": "Morning Batch",
-          "timeSlot": "9:00 AM - 11:00 AM"
-        }
-      ],
-      "salaryType": "PER_CLASS",
-      "salaryRate": 300,
-      "currentMonthClasses": 20,
-      "currentMonthSalary": 6000,
-      ...
+      "mobile": "1234567890",
+      "role": "STAFF",
+      "salaryType": "MONTHLY_FIXED",
+      "salaryRate": 15000,
+      "isActive": true,
+      "loginCredentials": {
+        "email": "staff@branch.com",
+        "password": "STF001"
+      },
+      "createdAt": "2026-01-24T10:00:00.000Z",
+      "updatedAt": "2026-01-24T10:00:00.000Z"
     }
   ]
 }
 ```
+
+---
+
+### Get Staff by ID
+**Method:** `GET`  
+**URL:** `/api/admin/staff/:id`  
+**Headers:** `Authorization: Bearer <JWT_TOKEN>`
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "_id": "<STAFF_ID>",
+    "staffId": "DHK001-STF-001",
+    "name": "Staff Name",
+    "email": "staff@branch.com",
+    "mobile": "1234567890",
+    "role": "STAFF",
+    "salaryType": "MONTHLY_FIXED",
+    "salaryRate": 15000,
+    "isActive": true,
+    "loginCredentials": {
+      "email": "staff@branch.com",
+      "password": "STF001"
+    },
+    "createdAt": "2026-01-24T10:00:00.000Z",
+    "updatedAt": "2026-01-24T10:00:00.000Z"
+  }
+}
+```
+
+**Error Responses:**
+- `404` - Staff not found
+
+---
+
+### Update Staff
+**Method:** `POST`  
+**URL:** `/api/admin/staff/:id/update`  
+**Headers:** 
+- `Authorization: Bearer <JWT_TOKEN>`
+- `Content-Type: application/json`
+
+**Body (raw JSON, all fields optional):**
+```json
+{
+  "name": "Updated Staff Name",
+  "email": "updated.staff@branch.com",
+  "mobile": "9876543210",
+  "salaryType": "MONTHLY_FIXED",
+  "salaryRate": 18000,
+  "isActive": true
+}
+```
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "message": "Staff updated successfully",
+  "data": {
+    "_id": "<STAFF_ID>",
+    "staffId": "DHK001-STF-001",
+    "name": "Updated Staff Name",
+    "email": "updated.staff@branch.com",
+    "mobile": "9876543210",
+    "role": "STAFF",
+    "salaryType": "MONTHLY_FIXED",
+    "salaryRate": 18000,
+    "isActive": true,
+    "loginCredentials": {
+      "email": "updated.staff@branch.com",
+      "password": "STF001"
+    },
+    "createdAt": "2026-01-24T10:00:00.000Z",
+    "updatedAt": "2026-01-27T10:30:00.000Z"
+  }
+}
+```
+
+**Error Responses:**
+- `404` - Staff not found
+- `400` - Invalid salaryType (must be MONTHLY_FIXED)
+- `409` - Email already registered
+
+**Notes:**
+- All fields are optional - only provided fields will be updated
+- Email is checked against both Staff and Teacher models to ensure uniqueness
+- Email update also updates login credentials email
+
+---
+
+### Delete Staff
+**Method:** `POST`  
+**URL:** `/api/admin/staff/:id/delete`  
+**Headers:** `Authorization: Bearer <JWT_TOKEN>`
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "message": "Staff deleted successfully"
+}
+```
+
+**Error Responses:**
+- `404` - Staff not found
+
+**Notes:**
+- Staff is permanently deleted from the database
+- This action cannot be undone
+- All actions are logged in audit log
 
 ---
 

@@ -38,10 +38,6 @@ const staffSchema = new mongoose.Schema(
       enum: ['STAFF', 'TEACHER'],
       required: [true, 'Role is required'],
     },
-    assignedBatches: [{
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Batch',
-    }],
     salaryType: {
       type: String,
       enum: ['PER_CLASS', 'MONTHLY_FIXED', 'HOURLY'],
@@ -50,16 +46,6 @@ const staffSchema = new mongoose.Schema(
     salaryRate: {
       type: Number,
       required: [true, 'Salary rate is required'],
-      min: 0,
-    },
-    currentMonthClasses: {
-      type: Number,
-      default: 0,
-      min: 0,
-    },
-    currentMonthSalary: {
-      type: Number,
-      default: 0,
       min: 0,
     },
     qrCode: {

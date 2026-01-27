@@ -1,6 +1,7 @@
 const Batch = require('../models/batch.model');
 const Course = require('../../SuperAdmin/models/course.model');
 const Staff = require('../models/staff.model');
+const Teacher = require('../models/teacher.model');
 const { logAudit } = require('../utils/auditLogger');
 const config = require('../config/env.config');
 
@@ -28,7 +29,7 @@ const createBatch = async (req, res) => {
 
     // Verify teacher if provided
     if (teacherId) {
-      const teacher = await Staff.findOne({ _id: teacherId, branchId, role: 'TEACHER' });
+      const teacher = await Teacher.findOne({ _id: teacherId, branchId });
       if (!teacher) {
         return res.status(404).json({ success: false, message: 'Teacher not found' });
       }
@@ -59,7 +60,7 @@ const createBatch = async (req, res) => {
 
     // Update teacher's assigned batches if teacher provided
     if (teacherId) {
-      await Staff.findByIdAndUpdate(teacherId, {
+      await Teacher.findByIdAndUpdate(teacherId, {
         $addToSet: { assignedBatches: batch._id },
       });
     }
@@ -76,16 +77,52 @@ const createBatch = async (req, res) => {
       userAgent: req.get('user-agent'),
     });
 
+    // Populate batch details for response
+    const populatedBatch = await Batch.findById(batch._id)
+      .populate('courseId', 'name courseCategory')
+      .populate('teacherId', 'name email');
+
     res.status(201).json({
       success: true,
       message: 'Batch created successfully',
-      data: batch,
+      data: populatedBatch,
     });
   } catch (error) {
     console.error('Create batch error:', error);
     res.status(500).json({
       success: false,
       message: 'Server error while creating batch',
+      error: config.isDevelopment() ? error.message : undefined,
+    });
+  }
+};
+
+/**
+ * Get Batch by ID
+ * GET /api/admin/batches/:id
+ */
+const getBatchById = async (req, res) => {
+  try {
+    const branchId = req.branchId;
+    const { id } = req.params;
+
+    const batch = await Batch.findOne({ _id: id, branchId })
+      .populate('courseId', 'name courseCategory')
+      .populate('teacherId', 'name email');
+
+    if (!batch) {
+      return res.status(404).json({ success: false, message: 'Batch not found' });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: batch,
+    });
+  } catch (error) {
+    console.error('Get batch by ID error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while fetching batch',
       error: config.isDevelopment() ? error.message : undefined,
     });
   }
@@ -141,6 +178,14 @@ const updateBatch = async (req, res) => {
       }
     });
 
+    // Verify teacher if provided
+    if (req.body.teacherId) {
+      const teacher = await Teacher.findOne({ _id: req.body.teacherId, branchId });
+      if (!teacher) {
+        return res.status(404).json({ success: false, message: 'Teacher not found' });
+      }
+    }
+
     // Kids batch discount is read-only, don't allow changes
     if (req.body.discountPercentage !== undefined) {
       const batch = await Batch.findOne({ _id: id, branchId });
@@ -175,10 +220,15 @@ const updateBatch = async (req, res) => {
       userAgent: req.get('user-agent'),
     });
 
+    // Populate batch details for response
+    const populatedBatch = await Batch.findById(batch._id)
+      .populate('courseId', 'name courseCategory')
+      .populate('teacherId', 'name email');
+
     res.status(200).json({
       success: true,
       message: 'Batch updated successfully',
-      data: batch,
+      data: populatedBatch,
     });
   } catch (error) {
     console.error('Update batch error:', error);
@@ -190,8 +240,166 @@ const updateBatch = async (req, res) => {
   }
 };
 
+/**
+ * Delete Batch
+ * POST /api/admin/batches/:id/delete
+ */
+const deleteBatch = async (req, res) => {
+  try {
+    const branchId = req.branchId;
+    const { id } = req.params;
+
+    // Find and verify batch belongs to admin's branch
+    const batch = await Batch.findOne({ _id: id, branchId });
+    if (!batch) {
+      return res.status(404).json({ success: false, message: 'Batch not found' });
+    }
+
+    // Check if batch has students
+    const studentCount = batch.currentStudents || 0;
+    if (studentCount > 0) {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot delete batch with active students. Current students: ${studentCount}`,
+      });
+    }
+
+    // Store old data for audit log
+    const oldData = {
+      name: batch.name,
+      timeSlot: batch.timeSlot,
+      monthlyFee: batch.monthlyFee,
+      teacherId: batch.teacherId,
+      courseId: batch.courseId,
+      maxStudents: batch.maxStudents,
+    };
+
+    // Delete batch
+    await Batch.findByIdAndDelete(id);
+
+    // Log audit
+    await logAudit({
+      branchId,
+      userId: req.user.id,
+      role: req.user.role,
+      action: 'DELETE',
+      module: 'BATCH',
+      entityId: id,
+      oldData,
+      newData: null,
+      ip: req.ip,
+      userAgent: req.get('user-agent'),
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Batch deleted successfully',
+    });
+  } catch (error) {
+    console.error('Delete batch error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while deleting batch',
+      error: config.isDevelopment() ? error.message : undefined,
+    });
+  }
+};
+
+/**
+ * Assign Teacher to Batch
+ * POST /api/admin/batches/:id/assign-teacher
+ */
+const assignTeacherToBatch = async (req, res) => {
+  try {
+    const branchId = req.branchId;
+    const { id } = req.params;
+    const { teacherId, course } = req.body;
+
+    if (!teacherId || !course) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required fields: teacherId, course',
+      });
+    }
+
+    // Verify batch exists
+    const batch = await Batch.findOne({ _id: id, branchId });
+    if (!batch) {
+      return res.status(404).json({ success: false, message: 'Batch not found' });
+    }
+
+    // Verify course matches batch course
+    if (batch.courseId.toString() !== course) {
+      return res.status(400).json({
+        success: false,
+        message: 'Course ID does not match batch course',
+      });
+    }
+
+    // Verify teacher exists and belongs to same branch
+    const teacher = await Teacher.findOne({ _id: teacherId, branchId });
+    if (!teacher) {
+      return res.status(404).json({ success: false, message: 'Teacher not found' });
+    }
+
+    // Store old teacher ID for audit log
+    const oldTeacherId = batch.teacherId;
+
+    // Remove batch from old teacher's assigned batches if exists
+    if (oldTeacherId) {
+      await Teacher.findByIdAndUpdate(oldTeacherId, {
+        $pull: { assignedBatches: batch._id },
+      });
+    }
+
+    // Update batch with new teacher
+    batch.teacherId = teacherId;
+    await batch.save();
+
+    // Add batch to new teacher's assigned batches
+    await Teacher.findByIdAndUpdate(teacherId, {
+      $addToSet: { assignedBatches: batch._id },
+    });
+
+    // Log audit
+    await logAudit({
+      branchId,
+      userId: req.user.id,
+      role: req.user.role,
+      action: 'ASSIGN',
+      module: 'BATCH',
+      entityId: batch._id,
+      oldData: { teacherId: oldTeacherId },
+      newData: { teacherId, course },
+      ip: req.ip,
+      userAgent: req.get('user-agent'),
+    });
+
+    // Populate batch details for response
+    const populatedBatch = await Batch.findById(batch._id)
+      .populate('courseId', 'name courseCategory')
+      .populate('teacherId', 'name email');
+
+    res.status(200).json({
+      success: true,
+      message: 'Teacher assigned to batch successfully',
+      data: populatedBatch,
+    });
+  } catch (error) {
+    console.error('Assign teacher to batch error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while assigning teacher to batch',
+      error: config.isDevelopment() ? error.message : undefined,
+    });
+  }
+};
+
 module.exports = {
   createBatch,
   getBatches,
+  getBatchById,
   updateBatch,
+  deleteBatch,
+  assignTeacherToBatch,
 };

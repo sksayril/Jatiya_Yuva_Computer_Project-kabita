@@ -20,6 +20,7 @@ Complete API documentation for the Staff Panel of National Youth Computer Center
 8. [Inquiry Management](#inquiry-management)
 9. [Salary View](#salary-view)
 10. [Reports](#reports)
+11. [Batch Management](#batch-management)
 
 ---
 
@@ -848,6 +849,77 @@ Complete API documentation for the Staff Panel of National Youth Computer Center
   "error": "Error details (only in development mode)"
 }
 ```
+
+---
+
+## Batch Management
+
+### Assign Teacher to Batch
+**Method:** `POST`  
+**URL:** `/api/admin/batches/:id/assign-teacher`  
+**Headers:** 
+- `Authorization: Bearer <JWT_TOKEN>`
+- `Content-Type: application/json`
+
+**Description:** Assigns a teacher to a batch. This endpoint is accessible to both ADMIN and STAFF roles. If a teacher is already assigned to the batch, the old assignment is replaced with the new one.
+
+**Body (raw JSON):**
+```json
+{
+  "teacherId": "<TEACHER_ID>",
+  "course": "<COURSE_ID>"
+}
+```
+
+**Required Fields:**
+- `teacherId` - Teacher ID to assign to the batch
+- `course` - Course ID to validate batch course matches
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "message": "Teacher assigned to batch successfully",
+  "data": {
+    "_id": "<BATCH_ID>",
+    "name": "Morning Batch",
+    "timeSlot": "9:00 AM - 11:00 AM",
+    "monthlyFee": 1000,
+    "isKidsBatch": false,
+    "discountPercentage": 0,
+    "batchType": "OFFLINE",
+    "courseId": {
+      "_id": "<COURSE_ID>",
+      "name": "DCA",
+      "courseCategory": "Basic"
+    },
+    "teacherId": {
+      "_id": "<TEACHER_ID>",
+      "name": "Teacher Name",
+      "email": "teacher@branch.com"
+    },
+    "maxStudents": 30,
+    "currentStudents": 25,
+    "isActive": true,
+    "branchId": "<BRANCH_ID>",
+    "createdAt": "2024-01-15T10:00:00.000Z",
+    "updatedAt": "2024-01-27T10:30:00.000Z"
+  }
+}
+```
+
+**Error Responses:**
+- `400` - Missing required fields: teacherId, course
+- `400` - Course ID does not match batch course
+- `404` - Batch not found
+- `404` - Teacher not found
+
+**Notes:**
+- If a teacher is already assigned to the batch, the old teacher is automatically unassigned
+- The old teacher's `assignedBatches` array is updated to remove this batch
+- The new teacher's `assignedBatches` array is updated to include this batch
+- Both ADMIN and STAFF roles can use this endpoint
+- All actions are logged in audit log
 
 ---
 

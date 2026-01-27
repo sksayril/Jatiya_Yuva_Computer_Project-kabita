@@ -16,7 +16,6 @@ const createStaff = async (req, res) => {
       name,
       email,
       mobile,
-      assignedBatches,
       salaryType,
       salaryRate,
     } = req.body;
@@ -59,20 +58,6 @@ const createStaff = async (req, res) => {
     const loginEmail = email.toLowerCase().trim();
     const password = `STF${staffId.split('-')[2]}`; // Simple password generation
 
-    // Verify assigned batches if provided
-    if (assignedBatches && Array.isArray(assignedBatches) && assignedBatches.length > 0) {
-      const batches = await Batch.find({
-        _id: { $in: assignedBatches },
-        branchId,
-      });
-      if (batches.length !== assignedBatches.length) {
-        return res.status(400).json({
-          success: false,
-          message: 'One or more batches not found or belong to different branch',
-        });
-      }
-    }
-
     // Create staff (role is always STAFF)
     const staff = await Staff.create({
       branchId,
@@ -81,11 +66,8 @@ const createStaff = async (req, res) => {
       email: loginEmail,
       mobile: mobile.trim(),
       role: 'STAFF',
-      assignedBatches: assignedBatches || [],
       salaryType,
       salaryRate: Number(salaryRate),
-      currentMonthClasses: 0,
-      currentMonthSalary: 0,
       isActive: true,
       loginCredentials: {
         email: loginEmail,
@@ -109,17 +91,15 @@ const createStaff = async (req, res) => {
       userAgent: req.get('user-agent'),
     });
 
-    // Remove qrCode from response
+    // Remove qrCode and idCardUrl from response
     const staffData = staff.toObject();
     delete staffData.qrCode;
+    delete staffData.idCardUrl;
 
     res.status(201).json({
       success: true,
       message: 'Staff created successfully',
-      data: {
-        ...staffData,
-        idCardUrl,
-      },
+      data: staffData,
     });
   } catch (error) {
     console.error('Create staff error:', error);
@@ -145,12 +125,19 @@ const getStaff = async (req, res) => {
     if (isActive !== undefined) query.isActive = isActive === 'true';
 
     const staff = await Staff.find(query)
-      .populate('assignedBatches', 'name timeSlot')
       .sort({ createdAt: -1 });
+
+    // Remove qrCode and idCardUrl from all staff records
+    const staffList = staff.map(s => {
+      const staffData = s.toObject();
+      delete staffData.qrCode;
+      delete staffData.idCardUrl;
+      return staffData;
+    });
 
     res.status(200).json({
       success: true,
-      data: staff,
+      data: staffList,
     });
   } catch (error) {
     console.error('Get staff error:', error);
@@ -190,17 +177,6 @@ const calculateStaffSalary = async (staffId, month, year) => {
     // TODO: Implement hourly calculation based on check-in/check-out times
     salary = 0; // Placeholder
   }
-
-  // Update staff record
-  await Staff.findByIdAndUpdate(staffId, {
-    currentMonthClasses: staff.salaryType === 'PER_CLASS' ? 
-      await StaffAttendance.countDocuments({
-        staffId,
-        date: { $gte: monthStart, $lte: monthEnd },
-        status: 'Present',
-      }) : staff.currentMonthClasses,
-    currentMonthSalary: salary,
-  });
 
   return salary;
 };
@@ -639,10 +615,222 @@ const deleteTeacher = async (req, res) => {
   }
 };
 
+/**
+ * Get Staff by ID
+ * GET /api/admin/staff/:id
+ */
+const getStaffById = async (req, res) => {
+  try {
+    const branchId = req.branchId;
+    const { id } = req.params;
+
+    const staff = await Staff.findOne({ _id: id, branchId });
+    if (!staff) {
+      return res.status(404).json({
+        success: false,
+        message: 'Staff not found',
+      });
+    }
+
+    // Remove qrCode and idCardUrl from response
+    const staffData = staff.toObject();
+    delete staffData.qrCode;
+    delete staffData.idCardUrl;
+
+    res.status(200).json({
+      success: true,
+      data: staffData,
+    });
+  } catch (error) {
+    console.error('Get staff by ID error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while fetching staff',
+      error: config.isDevelopment() ? error.message : undefined,
+    });
+  }
+};
+
+/**
+ * Update Staff
+ * PATCH /api/admin/staff/:id
+ */
+const updateStaff = async (req, res) => {
+  try {
+    const branchId = req.branchId;
+    const { id } = req.params;
+    const {
+      name,
+      email,
+      mobile,
+      salaryType,
+      salaryRate,
+      isActive,
+    } = req.body;
+
+    // Find staff
+    const staff = await Staff.findOne({ _id: id, branchId });
+    if (!staff) {
+      return res.status(404).json({
+        success: false,
+        message: 'Staff not found',
+      });
+    }
+
+    // Store old data for audit log
+    const oldData = {
+      name: staff.name,
+      email: staff.email,
+      mobile: staff.mobile,
+      salaryType: staff.salaryType,
+      salaryRate: staff.salaryRate,
+      isActive: staff.isActive,
+    };
+
+    // Update fields if provided
+    if (name !== undefined) staff.name = name.trim();
+    
+    if (email !== undefined) {
+      const newEmail = email.toLowerCase().trim();
+      // Check for duplicate email (excluding current staff)
+      const existingStaff = await Staff.findOne({
+        email: newEmail,
+        _id: { $ne: id },
+      });
+      const existingTeacher = await Teacher.findOne({ email: newEmail });
+      if (existingStaff || existingTeacher) {
+        return res.status(409).json({
+          success: false,
+          message: 'Email already registered',
+        });
+      }
+      staff.email = newEmail;
+      if (staff.loginCredentials) {
+        staff.loginCredentials.email = newEmail;
+      }
+    }
+
+    if (mobile !== undefined) staff.mobile = mobile.trim();
+
+    if (salaryType !== undefined) {
+      if (salaryType !== 'MONTHLY_FIXED') {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid salaryType. Only MONTHLY_FIXED is allowed for staff',
+        });
+      }
+      staff.salaryType = salaryType;
+    }
+
+    if (salaryRate !== undefined) staff.salaryRate = Number(salaryRate);
+    if (isActive !== undefined) staff.isActive = isActive;
+
+    await staff.save();
+
+    // Log the action
+    await logAudit({
+      branchId,
+      userId: req.user.id,
+      role: req.user.role,
+      action: 'UPDATE',
+      module: 'STAFF',
+      entityId: staff._id,
+      oldData,
+      newData: {
+        name: staff.name,
+        email: staff.email,
+        mobile: staff.mobile,
+        salaryType: staff.salaryType,
+        salaryRate: staff.salaryRate,
+        isActive: staff.isActive,
+      },
+      ip: req.ip,
+      userAgent: req.get('user-agent'),
+    });
+
+    // Remove qrCode and idCardUrl from response
+    const staffData = staff.toObject();
+    delete staffData.qrCode;
+    delete staffData.idCardUrl;
+
+    res.status(200).json({
+      success: true,
+      message: 'Staff updated successfully',
+      data: staffData,
+    });
+  } catch (error) {
+    console.error('Update staff error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while updating staff',
+      error: config.isDevelopment() ? error.message : undefined,
+    });
+  }
+};
+
+/**
+ * Delete Staff
+ * DELETE /api/admin/staff/:id
+ */
+const deleteStaff = async (req, res) => {
+  try {
+    const branchId = req.branchId;
+    const { id } = req.params;
+
+    // Find staff
+    const staff = await Staff.findOne({ _id: id, branchId });
+    if (!staff) {
+      return res.status(404).json({
+        success: false,
+        message: 'Staff not found',
+      });
+    }
+
+    // Store staff data for audit log before deletion
+    const deletedData = {
+      staffId: staff.staffId,
+      name: staff.name,
+      email: staff.email,
+      role: staff.role,
+    };
+
+    // Delete staff
+    await Staff.findByIdAndDelete(id);
+
+    // Log the action
+    await logAudit({
+      branchId,
+      userId: req.user.id,
+      role: req.user.role,
+      action: 'DELETE',
+      module: 'STAFF',
+      entityId: id,
+      oldData: deletedData,
+      ip: req.ip,
+      userAgent: req.get('user-agent'),
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Staff deleted successfully',
+    });
+  } catch (error) {
+    console.error('Delete staff error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while deleting staff',
+      error: config.isDevelopment() ? error.message : undefined,
+    });
+  }
+};
+
 module.exports = {
   createStaff,
   createTeacher,
   getStaff,
+  getStaffById,
+  updateStaff,
+  deleteStaff,
   getTeachers,
   getTeacherById,
   updateTeacher,
