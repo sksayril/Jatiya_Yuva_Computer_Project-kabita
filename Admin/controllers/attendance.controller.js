@@ -24,7 +24,7 @@ const markStudentAttendance = async (req, res) => {
     }
 
     // Verify student belongs to branch
-    const student = await Student.findOne({ _id: studentId, branchId });
+    const student = await Student.findOne({ studentId, branchId });
     if (!student) {
       return res.status(404).json({ success: false, message: 'Student not found' });
     }
@@ -77,7 +77,7 @@ const markStudentAttendance = async (req, res) => {
 
     const existingAttendance = await StudentAttendance.findOne({
       branchId,
-      studentId,
+      studentId: student._id,
       date: { $gte: attendanceDate, $lte: attendanceDateEnd },
     });
 
@@ -111,7 +111,7 @@ const markStudentAttendance = async (req, res) => {
     // Create attendance record
     const attendance = await StudentAttendance.create({
       branchId,
-      studentId,
+      studentId: student._id,
       batchId,
       date: attendanceDate,
       timeSlot: timeSlot || batch.timeSlot,
@@ -127,7 +127,7 @@ const markStudentAttendance = async (req, res) => {
       action: 'CREATE',
       module: 'STUDENT_ATTENDANCE',
       entityId: attendance._id,
-      newData: { studentId, status, method },
+      newData: { studentId: student.studentId, status, method },
       ip: req.ip,
       userAgent: req.get('user-agent'),
     });
@@ -353,9 +353,202 @@ const getStaffAttendance = async (req, res) => {
   }
 };
 
+/**
+ * Get Student Attendance by ID
+ * GET /api/admin/attendance/student/:id
+ */
+const getStudentAttendanceById = async (req, res) => {
+  try {
+    const branchId = req.branchId;
+    const { id } = req.params;
+
+    // Validate ID format
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid attendance ID format',
+      });
+    }
+
+    const attendance = await StudentAttendance.findOne({ _id: id, branchId })
+      .populate('studentId', 'studentId name mobile')
+      .populate('batchId', 'name timeSlot')
+      .populate('markedBy', 'email role');
+
+    if (!attendance) {
+      return res.status(404).json({
+        success: false,
+        message: 'Student attendance not found',
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: attendance,
+    });
+  } catch (error) {
+    console.error('Get student attendance by ID error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while fetching student attendance',
+      error: config.isDevelopment() ? error.message : undefined,
+    });
+  }
+};
+
+/**
+ * Update Student Attendance
+ * POST /api/admin/attendance/student/:id/update
+ */
+const updateStudentAttendance = async (req, res) => {
+  try {
+    const branchId = req.branchId;
+    const { id } = req.params;
+    const { status, timeSlot, method } = req.body;
+
+    // Validate ID format
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid attendance ID format',
+      });
+    }
+
+    // Validate status if provided
+    if (status && !['Present', 'Absent', 'Late'].includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid status. Must be: Present, Absent, or Late',
+      });
+    }
+
+    // Validate method if provided
+    if (method && !['QR', 'FACE', 'MANUAL'].includes(method)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid method. Must be: QR, FACE, or MANUAL',
+      });
+    }
+
+    const attendance = await StudentAttendance.findOne({ _id: id, branchId });
+
+    if (!attendance) {
+      return res.status(404).json({
+        success: false,
+        message: 'Student attendance not found',
+      });
+    }
+
+    // Store old data for audit
+    const oldData = {
+      status: attendance.status,
+      timeSlot: attendance.timeSlot,
+      method: attendance.method,
+    };
+
+    // Update fields
+    if (status) attendance.status = status;
+    if (timeSlot) attendance.timeSlot = timeSlot;
+    if (method) attendance.method = method;
+
+    const updatedAttendance = await attendance.save();
+
+    // Log audit
+    await logAudit({
+      branchId,
+      userId: req.user.id,
+      role: req.user.role,
+      action: 'UPDATE',
+      module: 'STUDENT_ATTENDANCE',
+      entityId: id,
+      oldData,
+      newData: {
+        status: updatedAttendance.status,
+        timeSlot: updatedAttendance.timeSlot,
+        method: updatedAttendance.method,
+      },
+      ip: req.ip,
+      userAgent: req.get('user-agent'),
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Student attendance updated successfully',
+      data: await updatedAttendance.populate('studentId', 'studentId name mobile').populate('batchId', 'name timeSlot'),
+    });
+  } catch (error) {
+    console.error('Update student attendance error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while updating student attendance',
+      error: config.isDevelopment() ? error.message : undefined,
+    });
+  }
+};
+
+/**
+ * Delete Student Attendance
+ * POST /api/admin/attendance/student/:id/delete
+ */
+const deleteStudentAttendance = async (req, res) => {
+  try {
+    const branchId = req.branchId;
+    const { id } = req.params;
+
+    // Validate ID format
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid attendance ID format',
+      });
+    }
+
+    const attendance = await StudentAttendance.findOneAndDelete({ _id: id, branchId });
+
+    if (!attendance) {
+      return res.status(404).json({
+        success: false,
+        message: 'Student attendance not found',
+      });
+    }
+
+    // Log audit
+    await logAudit({
+      branchId,
+      userId: req.user.id,
+      role: req.user.role,
+      action: 'DELETE',
+      module: 'STUDENT_ATTENDANCE',
+      entityId: id,
+      oldData: {
+        studentId: attendance.studentId,
+        status: attendance.status,
+        date: attendance.date,
+      },
+      ip: req.ip,
+      userAgent: req.get('user-agent'),
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Student attendance deleted successfully',
+    });
+  } catch (error) {
+    console.error('Delete student attendance error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while deleting student attendance',
+      error: config.isDevelopment() ? error.message : undefined,
+    });
+  }
+};
+
 module.exports = {
   markStudentAttendance,
   markStaffAttendance,
   getStudentAttendance,
   getStaffAttendance,
+  getStudentAttendanceById,
+  updateStudentAttendance,
+  deleteStudentAttendance,
 };

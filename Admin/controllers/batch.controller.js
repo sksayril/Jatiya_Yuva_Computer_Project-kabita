@@ -315,10 +315,10 @@ const assignTeacherToBatch = async (req, res) => {
     const { id } = req.params;
     const { teacherId, course } = req.body;
 
-    if (!teacherId || !course) {
+    if (!teacherId) {
       return res.status(400).json({
         success: false,
-        message: 'Missing required fields: teacherId, course',
+        message: 'Missing required fields: teacherId',
       });
     }
 
@@ -328,12 +328,14 @@ const assignTeacherToBatch = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Batch not found' });
     }
 
-    // Verify course matches batch course
-    if (batch.courseId.toString() !== course) {
-      return res.status(400).json({
-        success: false,
-        message: 'Course ID does not match batch course',
-      });
+    // Verify course matches batch course if course supplied
+    if (course) {
+      if (batch.courseId.toString() !== course) {
+        return res.status(400).json({
+          success: false,
+          message: 'Course ID does not match batch course',
+        });
+      }
     }
 
     // Verify teacher exists and belongs to same branch
@@ -362,6 +364,8 @@ const assignTeacherToBatch = async (req, res) => {
     });
 
     // Log audit
+    const newData = { teacherId };
+    if (course) newData.course = course;
     await logAudit({
       branchId,
       userId: req.user.id,
@@ -370,7 +374,7 @@ const assignTeacherToBatch = async (req, res) => {
       module: 'BATCH',
       entityId: batch._id,
       oldData: { teacherId: oldTeacherId },
-      newData: { teacherId, course },
+      newData,
       ip: req.ip,
       userAgent: req.get('user-agent'),
     });

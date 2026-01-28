@@ -753,6 +753,134 @@ const getStudentById = async (req, res) => {
   }
 };
 
+/**
+ * Join Student to Batch
+ * POST /api/admin/students/:studentId/join-batch
+ */
+const joinBatch = async (req, res) => {
+  try {
+    const branchId = req.branchId;
+    const { id: studentId } = req.params;
+    const { batchId } = req.body;
+
+    // Validate required fields
+    if (!batchId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required field: batchId',
+      });
+    }
+
+    // Validate batchId format
+    if (!mongoose.Types.ObjectId.isValid(batchId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid batchId format',
+      });
+    }
+
+    // Check student exists and belongs to branch
+    const student = await Student.findOne({ _id: studentId, branchId })
+      .populate('courseId', 'name monthlyFees');
+
+    if (!student) {
+      return res.status(404).json({
+        success: false,
+        message: 'Student not found',
+      });
+    }
+
+    // Check student is not already assigned to a batch
+    if (student.batchId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Student is already assigned to a batch',
+      });
+    }
+
+    // Check batch exists, is active, and belongs to branch
+    const batch = await Batch.findOne({ _id: batchId, branchId, isActive: true })
+      .populate('courseId', 'name monthlyFees');
+
+    if (!batch) {
+      return res.status(404).json({
+        success: false,
+        message: 'Batch not found or is inactive',
+      });
+    }
+
+    // Check batch is not full
+    if (batch.currentStudents >= batch.maxStudents) {
+      return res.status(400).json({
+        success: false,
+        message: `Batch is full. Max capacity: ${batch.maxStudents}`,
+      });
+    }
+
+    // Get monthly fee from batch or course
+    const monthlyFee = batch.monthlyFee || (batch.courseId?.monthlyFees || 0);
+
+    // Update student
+    const updatedStudent = await Student.findByIdAndUpdate(
+      student._id,
+      {
+        batchId,
+        status: 'ACTIVE',
+        joinDate: new Date(),
+        totalFees: monthlyFee,
+        paidAmount: 0,
+        dueAmount: monthlyFee,
+      },
+      { new: true }
+    ).populate('batchId', 'name timeSlot monthlyFee maxStudents');
+
+    // Increase batch current students count
+    await Batch.findByIdAndUpdate(batchId, {
+      $inc: { currentStudents: 1 },
+    });
+
+    // Log audit
+    await logAudit({
+      branchId,
+      userId: req.user.id,
+      role: req.user.role,
+      action: 'JOIN_BATCH',
+      module: 'STUDENT',
+      entityId: student._id,
+      newData: {
+        batchId,
+        status: 'ACTIVE',
+        totalFees: monthlyFee,
+        dueAmount: monthlyFee,
+      },
+      ip: req.ip,
+      userAgent: req.get('user-agent'),
+    });
+
+    // Return response
+    res.status(200).json({
+      success: true,
+      message: 'Student joined batch successfully',
+      data: {
+        studentId: updatedStudent.studentId,
+        studentName: updatedStudent.name || updatedStudent.student?.name,
+        batchName: batch.name,
+        timeSlot: batch.timeSlot,
+        monthlyFee,
+        dueAmount: monthlyFee,
+        joinDate: updatedStudent.joinDate,
+      },
+    });
+  } catch (error) {
+    console.error('Join batch error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while joining student to batch',
+      error: config.isDevelopment() ? error.message : undefined,
+    });
+  }
+};
+
 module.exports = {
   manualRegistration,
   scanForm,
@@ -760,6 +888,7 @@ module.exports = {
   dropStudent,
   reactivateStudent,
   changeBatch,
+  joinBatch,
   getStudents,
   getStudentById,
 };

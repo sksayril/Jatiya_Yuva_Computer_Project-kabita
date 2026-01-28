@@ -50,8 +50,7 @@ const paymentSchema = new mongoose.Schema(
     },
     collectedBy: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
-      required: true,
+      ref: 'Staff',
     },
   },
   { timestamps: true }
@@ -62,6 +61,8 @@ paymentSchema.index({ studentId: 1, createdAt: -1 });
 // receiptNumber already indexed via unique: true
 
 // Check if model already exists to avoid overwrite error
-const Payment = mongoose.models.Payment || mongoose.model('Payment', paymentSchema);
+// Force delete the cached model to ensure fresh schema
+delete mongoose.models.Payment;
+const Payment = mongoose.model('Payment', paymentSchema);
 
 module.exports = Payment;

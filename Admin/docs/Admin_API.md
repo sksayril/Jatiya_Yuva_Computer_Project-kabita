@@ -377,6 +377,50 @@ Authorization: Bearer <JWT_TOKEN>
 
 ---
 
+### Join Student to Batch
+**Method:** `POST`  
+**URL:** `/api/admin/students/:studentId/join-batch`  
+**Headers:** 
+- `Authorization: Bearer <JWT_TOKEN>`
+- `Content-Type: application/json`
+
+**Body (raw JSON):**
+```json
+{
+  "batchId": "<BATCH_ID>"
+}
+```
+
+**Validations:**
+1. Student must exist in the same branch
+2. Student must not already be assigned to a batch
+3. Batch must exist and be active
+4. Batch must belong to the same branch
+5. Batch must not be full (currentStudents < maxStudents)
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "message": "Student joined batch successfully",
+  "data": {
+    "studentId": "DHK006-2026-001",
+    "studentName": "Jane Smith",
+    "batchName": "Evening Batch",
+    "timeSlot": "5:00 PM - 7:00 PM",
+    "monthlyFee": 5000,
+    "dueAmount": 5000,
+    "joinDate": "2025-01-09T10:30:00.000Z"
+  }
+}
+```
+
+**Error Responses:**
+- `400` - Invalid batchId format or student already in batch or batch is full
+- `404` - Student or batch not found
+
+---
+
 ### Get All Students
 **Method:** `GET`  
 **URL:** `/api/admin/students`  
@@ -617,6 +661,121 @@ Authorization: Bearer <JWT_TOKEN>
 
 ---
 
+### Get Student Attendance by ID
+**Method:** `GET`  
+**URL:** `/api/admin/attendance/student/:id`  
+**Headers:** `Authorization: Bearer <JWT_TOKEN>`
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "_id": "<ATTENDANCE_ID>",
+    "studentId": {
+      "_id": "<STUDENT_ID>",
+      "studentId": "DHK006-2026-001",
+      "name": "John Doe",
+      "mobile": "1234567890"
+    },
+    "batchId": {
+      "_id": "<BATCH_ID>",
+      "name": "Morning Batch",
+      "timeSlot": "6:00 AM - 8:00 AM"
+    },
+    "date": "2026-01-29T00:00:00.000Z",
+    "timeSlot": "6:00 AM - 8:00 AM",
+    "status": "Present",
+    "method": "MANUAL",
+    "markedBy": {
+      "_id": "<USER_ID>",
+      "email": "admin@branch.com",
+      "role": "ADMIN"
+    },
+    "createdAt": "2026-01-29T10:30:00.000Z",
+    "updatedAt": "2026-01-29T10:30:00.000Z"
+  }
+}
+```
+
+**Error Responses:**
+- `400` - Invalid attendance ID format
+- `404` - Student attendance not found
+
+---
+
+### Update Student Attendance
+**Method:** `POST`  
+**URL:** `/api/admin/attendance/student/:id/update`  
+**Headers:** 
+- `Authorization: Bearer <JWT_TOKEN>`
+- `Content-Type: application/json`
+
+**Body (raw JSON):**
+```json
+{
+  "status": "Absent",
+  "timeSlot": "6:00 AM - 8:00 AM",
+  "method": "MANUAL"
+}
+```
+
+**Valid Status Values:** `Present`, `Absent`, `Late`  
+**Valid Method Values:** `QR`, `FACE`, `MANUAL`
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "message": "Student attendance updated successfully",
+  "data": {
+    "_id": "<ATTENDANCE_ID>",
+    "studentId": {
+      "_id": "<STUDENT_ID>",
+      "studentId": "DHK006-2026-001",
+      "name": "John Doe",
+      "mobile": "1234567890"
+    },
+    "batchId": {
+      "_id": "<BATCH_ID>",
+      "name": "Morning Batch",
+      "timeSlot": "6:00 AM - 8:00 AM"
+    },
+    "date": "2026-01-29T00:00:00.000Z",
+    "status": "Absent",
+    "method": "MANUAL",
+    "updatedAt": "2026-01-29T10:35:00.000Z"
+  }
+}
+```
+
+**Error Responses:**
+- `400` - Invalid status/method or invalid ID format
+- `404` - Student attendance not found
+
+---
+
+### Delete Student Attendance
+**Method:** `POST`  
+**URL:** `/api/admin/attendance/student/:id/delete`  
+**Headers:** `Authorization: Bearer <JWT_TOKEN>`
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "message": "Student attendance deleted successfully"
+}
+```
+
+**Error Responses:**
+- `400` - Invalid attendance ID format
+- `404` - Student attendance not found
+
+---
+
+---
+
 ## Payments
 
 ### Create Payment
@@ -710,6 +869,126 @@ Authorization: Bearer <JWT_TOKEN>
   ]
 }
 ```
+
+---
+
+### Get Payment by ID
+**Method:** `GET`  
+**URL:** `/api/admin/payments/:id`  
+**Headers:** `Authorization: Bearer <JWT_TOKEN>`
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "_id": "<PAYMENT_ID>",
+    "studentId": {
+      "_id": "<STUDENT_ID>",
+      "studentId": "DHK001-2024-001",
+      "name": "John Doe",
+      "mobile": "1234567890",
+      "email": "john@example.com"
+    },
+    "amount": 2000,
+    "paymentMode": "CASH",
+    "discount": 100,
+    "receiptNumber": "DHK001-202401-0001",
+    "month": "January",
+    "year": 2024,
+    "description": "Monthly fee payment",
+    "createdAt": "2024-01-15T10:00:00.000Z",
+    "updatedAt": "2024-01-15T10:00:00.000Z"
+  }
+}
+```
+
+**Error Responses:**
+- `404` - Payment not found
+
+---
+
+### Update Payment
+**Method:** `POST`  
+**URL:** `/api/admin/payments/:id/update`  
+**Headers:** 
+- `Authorization: Bearer <JWT_TOKEN>`
+- `Content-Type: application/json`
+
+**Description:** Updates a payment record. Updates student's paid amount and due amount accordingly if amount or discount changes. All fields are optional.
+
+**Body (raw JSON, all fields optional):**
+```json
+{
+  "amount": 2500,
+  "paymentMode": "UPI",
+  "discount": 150,
+  "description": "Updated payment for January"
+}
+```
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "message": "Payment updated successfully",
+  "data": {
+    "_id": "<PAYMENT_ID>",
+    "studentId": {
+      "_id": "<STUDENT_ID>",
+      "studentId": "DHK001-2024-001",
+      "name": "John Doe",
+      "mobile": "1234567890",
+      "email": "john@example.com"
+    },
+    "amount": 2500,
+    "paymentMode": "UPI",
+    "discount": 150,
+    "receiptNumber": "DHK001-202401-0001",
+    "month": "January",
+    "year": 2024,
+    "description": "Updated payment for January",
+    "createdAt": "2024-01-15T10:00:00.000Z",
+    "updatedAt": "2024-01-15T10:30:00.000Z"
+  }
+}
+```
+
+**Error Responses:**
+- `404` - Payment not found
+- `404` - Student not found
+
+**Notes:**
+- All fields are optional—only provided fields will be updated
+- If amount or discount changes, student's `paidAmount` and `dueAmount` are automatically recalculated
+- All actions are logged in audit log
+
+---
+
+### Delete Payment
+**Method:** `POST`  
+**URL:** `/api/admin/payments/:id/delete`  
+**Headers:** `Authorization: Bearer <JWT_TOKEN>`
+
+**Description:** Deletes a payment record. Automatically reverses the payment by updating student's paid amount and due amount.
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "message": "Payment deleted successfully"
+}
+```
+
+**Error Responses:**
+- `404` - Payment not found
+- `404` - Student not found
+
+**Notes:**
+- Deleting a payment reverses its effect on student's financials
+- Student's `paidAmount` is decreased and `dueAmount` is increased
+- This action cannot be undone
+- All actions are logged in audit log
 
 ---
 
@@ -1025,9 +1304,9 @@ Authorization: Bearer <JWT_TOKEN>
 }
 ```
 
-**Required Fields:**
-- `teacherId` - Teacher ID to assign to the batch
-- `course` - Course ID to validate batch course matches
+**Notes on fields:**
+- `teacherId` (required) - Teacher ID to assign to the batch
+- `course` (optional) - Course ID used only to validate that the batch belongs to the expected course; provide when you want the server to verify course-match
 
 **Success Response (200):**
 ```json
@@ -1063,8 +1342,8 @@ Authorization: Bearer <JWT_TOKEN>
 ```
 
 **Error Responses:**
-- `400` - Missing required fields: teacherId, course
-- `400` - Course ID does not match batch course
+- `400` - Missing required fields: teacherId
+- `400` - Course ID provided but does not match batch course
 - `404` - Batch not found
 - `404` - Teacher not found
 
