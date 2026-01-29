@@ -581,6 +581,12 @@ Authorization: Bearer <JWT_TOKEN>
 }
 ```
 
+**Method Options:**
+- `QR` - QR code scanning
+- `FACE` - Face recognition (placeholder)
+- `MANUAL` - Manual entry
+
+
 **Note:** Calling this endpoint again on the same date will record check-out time.
 
 ---
@@ -656,6 +662,86 @@ Authorization: Bearer <JWT_TOKEN>
       ...
     }
   ]
+}
+```
+
+---
+
+### Get Staff Attendance by ID
+**Method:** `GET`  
+**URL:** `/api/admin/attendance/staff/:id`  
+**Headers:** `Authorization: Bearer <JWT_TOKEN>`
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "_id": "<ATTENDANCE_ID>",
+    "staffId": {
+      "staffId": "DHK001-STF-001",
+      "name": "Staff Name",
+      "role": "STAFF",
+      "mobile": "1234567890"
+    },
+    "date": "2024-01-15T00:00:00.000Z",
+    "checkIn": "2024-01-15T09:00:00.000Z",
+    "checkOut": "2024-01-15T17:00:00.000Z",
+    "status": "Present",
+    "method": "QR",
+    "markedBy": {
+      "email": "admin@branch.com",
+      "role": "ADMIN"
+    }
+  }
+}
+```
+
+---
+
+### Update Staff Attendance
+**Method:** `POST`  
+**URL:** `/api/admin/attendance/staff/:id/update`  
+**Headers:** 
+- `Authorization: Bearer <JWT_TOKEN>`
+- `Content-Type: application/json`
+
+**Body (raw JSON):**
+```json
+{
+  "status": "Late",
+  "method": "MANUAL",
+  "checkIn": "2024-01-15T09:30:00.000Z",
+  "checkOut": "2024-01-15T18:00:00.000Z"
+}
+```
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "message": "Staff attendance updated successfully",
+  "data": {
+    "_id": "<ATTENDANCE_ID>",
+    "status": "Late",
+    "method": "MANUAL",
+    ...
+  }
+}
+```
+
+---
+
+### Delete Staff Attendance
+**Method:** `POST`  
+**URL:** `/api/admin/attendance/staff/:id/delete`  
+**Headers:** `Authorization: Bearer <JWT_TOKEN>`
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "message": "Staff attendance deleted successfully"
 }
 ```
 
@@ -1897,6 +1983,86 @@ Authorization: Bearer <JWT_TOKEN>
 
 ---
 
+### Get Exam by ID
+**Method:** `GET`  
+**URL:** `/api/admin/exams/:id`  
+**Headers:** `Authorization: Bearer <JWT_TOKEN>`
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "_id": "<EXAM_ID>",
+    "name": "Monthly Test - January",
+    "examType": "MONTHLY",
+    "courseId": {
+      "_id": "<COURSE_ID>",
+      "name": "DCA",
+      "courseCategory": "Basic"
+    },
+    "batchId": {
+      "_id": "<BATCH_ID>",
+      "name": "Morning Batch",
+      "timeSlot": "9:00 AM - 11:00 AM"
+    },
+    "examDate": "2024-01-30T00:00:00.000Z",
+    "maxMarks": 100,
+    "passingMarks": 40,
+    "isActive": true
+  }
+}
+```
+
+---
+
+### Update Exam
+**Method:** `POST`  
+**URL:** `/api/admin/exams/:id/update`  
+**Headers:** 
+- `Authorization: Bearer <JWT_TOKEN>`
+- `Content-Type: application/json`
+
+**Body (raw JSON, all fields optional):**
+```json
+{
+  "name": "Revised Monthly Test",
+  "maxMarks": 50,
+  "passingMarks": 15,
+  "isActive": false
+}
+```
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "message": "Exam updated successfully",
+  "data": {
+    "_id": "<EXAM_ID>",
+    "name": "Revised Monthly Test",
+    ...
+  }
+}
+```
+
+---
+
+### Delete Exam
+**Method:** `POST`  
+**URL:** `/api/admin/exams/:id/delete`  
+**Headers:** `Authorization: Bearer <JWT_TOKEN>`
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "message": "Exam deleted successfully"
+}
+```
+
+---
+
 ## Results
 
 ### Create/Update Result
@@ -1980,6 +2146,90 @@ Authorization: Bearer <JWT_TOKEN>
 
 ---
 
+### Get Result by ID
+**Method:** `GET`  
+**URL:** `/api/admin/results/:id`  
+**Headers:** `Authorization: Bearer <JWT_TOKEN>`
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "_id": "<RESULT_ID>",
+    "examId": {
+      "_id": "<EXAM_ID>",
+      "name": "Monthly Test - January",
+      "examType": "MONTHLY",
+      "passingMarks": 40,
+      "maxMarks": 100
+    },
+    "studentId": {
+      "studentId": "DHK001-2024-001",
+      "name": "John Doe",
+      "mobile": "1234567890"
+    },
+    "marksObtained": 75,
+    "maxMarks": 100,
+    "percentage": 75,
+    "status": "PASS",
+    "remarks": "Excellent"
+  }
+}
+```
+
+---
+
+### Update Result
+**Method:** `POST`  
+**URL:** `/api/admin/results/:id/update`  
+**Headers:** 
+- `Authorization: Bearer <JWT_TOKEN>`
+- `Content-Type: application/json`
+
+**Body (raw JSON, all fields optional):**
+```json
+{
+  "marksObtained": 85,
+  "maxMarks": 100,
+  "remarks": "Updated marks after re-evaluation"
+}
+```
+
+**Note:** If `marksObtained` or `maxMarks` are updated, `percentage` and `status` (PASS/FAIL) are automatically recalculated.
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "message": "Result updated successfully",
+  "data": {
+    "_id": "<RESULT_ID>",
+    "marksObtained": 85,
+    "percentage": 85,
+    "status": "PASS",
+    ...
+  }
+}
+```
+
+---
+
+### Delete Result
+**Method:** `POST`  
+**URL:** `/api/admin/results/:id/delete`  
+**Headers:** `Authorization: Bearer <JWT_TOKEN>`
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "message": "Result deleted successfully"
+}
+```
+
+---
+
 ## Certificates
 
 ### Generate Certificate
@@ -2009,8 +2259,6 @@ Authorization: Bearer <JWT_TOKEN>
     "certificateId": "CERT-2024-000001",
     "issueDate": "2024-01-15T00:00:00.000Z",
     "verified": true,
-    "qrCode": "data:image/png;base64,...",
-    "certificatePdfUrl": "",
     ...
   }
 }

@@ -27,24 +27,24 @@ const createResult = async (req, res) => {
     }
 
     // Verify student belongs to branch
-    const student = await Student.findOne({ _id: studentId, branchId });
+    const student = await Student.findOne({ studentId, branchId });
     if (!student) {
       return res.status(404).json({ success: false, message: 'Student not found' });
     }
 
     // Calculate percentage
     const percentage = Math.round((Number(marksObtained) / Number(maxMarks)) * 100);
-    
+
     // Determine pass/fail
     const status = percentage >= (exam.passingMarks / exam.maxMarks) * 100 ? 'PASS' : 'FAIL';
 
     // Create or update result
     const result = await Result.findOneAndUpdate(
-      { examId, studentId },
+      { examId, studentId: student._id },
       {
         branchId,
         examId,
-        studentId,
+        studentId: student._id,
         marksObtained: Number(marksObtained),
         maxMarks: Number(maxMarks),
         percentage,
@@ -61,7 +61,7 @@ const createResult = async (req, res) => {
       action: 'CREATE',
       module: 'RESULT',
       entityId: result._id,
-      newData: { examId, studentId, marksObtained, status },
+      newData: { examId, studentId: student.studentId, marksObtained, status },
       ip: req.ip,
       userAgent: req.get('user-agent'),
     });
@@ -114,7 +114,168 @@ const getResults = async (req, res) => {
   }
 };
 
+/**
+ * Get Result by ID
+ * GET /api/admin/results/:id
+ */
+const getResultById = async (req, res) => {
+  try {
+    const branchId = req.branchId;
+    const { id } = req.params;
+
+    const result = await Result.findOne({ _id: id, branchId })
+      .populate('examId', 'name examType examDate passingMarks maxMarks')
+      .populate('studentId', 'studentId name mobile');
+
+    if (!result) {
+      return res.status(404).json({
+        success: false,
+        message: 'Result not found',
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    console.error('Get result by ID error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while fetching result',
+      error: config.isDevelopment() ? error.message : undefined,
+    });
+  }
+};
+
+/**
+ * Update Result
+ * POST /api/admin/results/:id/update
+ */
+const updateResult = async (req, res) => {
+  try {
+    const branchId = req.branchId;
+    const { id } = req.params;
+    const { marksObtained, maxMarks, remarks } = req.body;
+
+    const result = await Result.findOne({ _id: id, branchId }).populate('examId');
+
+    if (!result) {
+      return res.status(404).json({
+        success: false,
+        message: 'Result not found',
+      });
+    }
+
+    const oldData = {
+      marksObtained: result.marksObtained,
+      maxMarks: result.maxMarks,
+      status: result.status,
+      percentage: result.percentage,
+      remarks: result.remarks,
+    };
+
+    // Update marks and recalculate if provided
+    if (marksObtained !== undefined) result.marksObtained = Number(marksObtained);
+    if (maxMarks !== undefined) result.maxMarks = Number(maxMarks);
+    if (remarks !== undefined) result.remarks = remarks.trim();
+
+    if (marksObtained !== undefined || maxMarks !== undefined) {
+      const percentage = Math.round((result.marksObtained / result.maxMarks) * 100);
+      result.percentage = percentage;
+
+      // Determine pass/fail based on original exam criteria
+      if (result.examId) {
+        result.status = percentage >= (result.examId.passingMarks / result.examId.maxMarks) * 100 ? 'PASS' : 'FAIL';
+      }
+    }
+
+    const updatedResult = await result.save();
+
+    await logAudit({
+      branchId,
+      userId: req.user.id,
+      role: req.user.role,
+      action: 'UPDATE',
+      module: 'RESULT',
+      entityId: id,
+      oldData,
+      newData: {
+        marksObtained: updatedResult.marksObtained,
+        maxMarks: updatedResult.maxMarks,
+        status: updatedResult.status,
+      },
+      ip: req.ip,
+      userAgent: req.get('user-agent'),
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Result updated successfully',
+      data: updatedResult,
+    });
+  } catch (error) {
+    console.error('Update result error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while updating result',
+      error: config.isDevelopment() ? error.message : undefined,
+    });
+  }
+};
+
+/**
+ * Delete Result
+ * POST /api/admin/results/:id/delete
+ */
+const deleteResult = async (req, res) => {
+  try {
+    const branchId = req.branchId;
+    const { id } = req.params;
+
+    const result = await Result.findOneAndDelete({ _id: id, branchId });
+
+    if (!result) {
+      return res.status(404).json({
+        success: false,
+        message: 'Result not found',
+      });
+    }
+
+    await logAudit({
+      branchId,
+      userId: req.user.id,
+      role: req.user.role,
+      action: 'DELETE',
+      module: 'RESULT',
+      entityId: id,
+      oldData: {
+        examId: result.examId,
+        studentId: result.studentId,
+        marksObtained: result.marksObtained,
+      },
+      ip: req.ip,
+      userAgent: req.get('user-agent'),
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Result deleted successfully',
+    });
+  } catch (error) {
+    console.error('Delete result error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while deleting result',
+      error: config.isDevelopment() ? error.message : undefined,
+    });
+  }
+};
+
 module.exports = {
   createResult,
   getResults,
+  getResultById,
+  updateResult,
+  deleteResult,
 };

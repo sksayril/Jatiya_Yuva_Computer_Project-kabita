@@ -33,14 +33,6 @@ const certificateSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
-    qrCode: {
-      type: String,
-      trim: true,
-    },
-    certificatePdfUrl: {
-      type: String,
-      trim: true,
-    },
     generatedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
@@ -54,7 +46,10 @@ certificateSchema.index({ branchId: 1, issueDate: -1 });
 // certificateId already indexed via unique: true
 certificateSchema.index({ studentId: 1 });
 
-// Check if model already exists to avoid overwrite error
-const Certificate = mongoose.models.Certificate || mongoose.model('Certificate', certificateSchema);
+// Force delete the cached model to ensure fresh schema
+if (mongoose.models.Certificate) {
+  delete mongoose.models.Certificate;
+}
+const Certificate = mongoose.model('Certificate', certificateSchema);
 
 module.exports = Certificate;

@@ -154,7 +154,7 @@ const markStudentAttendance = async (req, res) => {
 const markStaffAttendance = async (req, res) => {
   try {
     const branchId = req.branchId;
-    const { staffId, date, timeSlot, method, qrData } = req.body;
+    const { staffId, date, method, qrData } = req.body;
 
     if (!staffId || !date) {
       return res.status(400).json({
@@ -164,7 +164,7 @@ const markStaffAttendance = async (req, res) => {
     }
 
     // Verify staff belongs to branch
-    const staff = await Staff.findOne({ _id: staffId, branchId });
+    const staff = await Staff.findOne({ staffId, branchId });
     if (!staff) {
       return res.status(404).json({ success: false, message: 'Staff not found' });
     }
@@ -203,7 +203,7 @@ const markStaffAttendance = async (req, res) => {
 
     const existingAttendance = await StaffAttendance.findOne({
       branchId,
-      staffId,
+      staffId: staff._id,
       date: { $gte: attendanceDate, $lte: attendanceDateEnd },
     });
 
@@ -228,9 +228,8 @@ const markStaffAttendance = async (req, res) => {
     // Create attendance record with check-in
     const attendance = await StaffAttendance.create({
       branchId,
-      staffId,
+      staffId: staff._id,
       date: attendanceDate,
-      timeSlot: timeSlot || '',
       checkIn: new Date(),
       status: 'Present',
       method: method || 'MANUAL',
@@ -239,7 +238,7 @@ const markStaffAttendance = async (req, res) => {
 
     // Update staff class count if teacher
     if (staff.role === 'TEACHER' && staff.salaryType === 'PER_CLASS') {
-      await Staff.findByIdAndUpdate(staffId, {
+      await Staff.findByIdAndUpdate(staff._id, {
         $inc: { currentMonthClasses: 1 },
       });
     }
@@ -251,7 +250,7 @@ const markStaffAttendance = async (req, res) => {
       action: 'CREATE',
       module: 'STAFF_ATTENDANCE',
       entityId: attendance._id,
-      newData: { staffId, status: 'Present', method },
+      newData: { staffId: staff.staffId, status: 'Present', method },
       ip: req.ip,
       userAgent: req.get('user-agent'),
     });
@@ -474,7 +473,10 @@ const updateStudentAttendance = async (req, res) => {
     res.status(200).json({
       success: true,
       message: 'Student attendance updated successfully',
-      data: await updatedAttendance.populate('studentId', 'studentId name mobile').populate('batchId', 'name timeSlot'),
+      data: await updatedAttendance.populate([
+        { path: 'studentId', select: 'studentId name mobile' },
+        { path: 'batchId', select: 'name timeSlot' }
+      ]),
     });
   } catch (error) {
     console.error('Update student attendance error:', error);
@@ -543,6 +545,190 @@ const deleteStudentAttendance = async (req, res) => {
   }
 };
 
+/**
+ * Get Staff Attendance by ID
+ * GET /api/admin/attendance/staff/:id
+ */
+const getStaffAttendanceById = async (req, res) => {
+  try {
+    const branchId = req.branchId;
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid attendance ID format',
+      });
+    }
+
+    // Try finding it with branchId first (normal operation)
+    let attendance = await StaffAttendance.findOne({ _id: id, branchId })
+      .populate('staffId', 'staffId name role mobile')
+      .populate('markedBy', 'email role');
+
+    if (!attendance) {
+      // Diagnostic: Check if it exists at all (might be another branch)
+      const existsInOtherBranch = await StaffAttendance.exists({ _id: id });
+
+      if (existsInOtherBranch) {
+        return res.status(403).json({
+          success: false,
+          message: 'Access denied. This attendance record belongs to another branch.',
+        });
+      }
+
+      return res.status(404).json({
+        success: false,
+        message: 'Staff attendance record not found',
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: attendance,
+    });
+  } catch (error) {
+    console.error('Get staff attendance by ID error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while fetching staff attendance',
+      error: config.isDevelopment() ? error.message : undefined,
+    });
+  }
+};
+
+/**
+ * Update Staff Attendance
+ * POST /api/admin/attendance/staff/:id/update
+ */
+const updateStaffAttendance = async (req, res) => {
+  try {
+    const branchId = req.branchId;
+    const { id } = req.params;
+    const { status, method, checkIn, checkOut } = req.body;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid attendance ID format',
+      });
+    }
+
+    const attendance = await StaffAttendance.findOne({ _id: id, branchId });
+
+    if (!attendance) {
+      return res.status(404).json({
+        success: false,
+        message: 'Staff attendance not found',
+      });
+    }
+
+    // Store old data for audit
+    const oldData = {
+      status: attendance.status,
+      method: attendance.method,
+      checkIn: attendance.checkIn,
+      checkOut: attendance.checkOut,
+    };
+
+    // Update fields
+    if (status) attendance.status = status;
+    if (method) attendance.method = method;
+    if (checkIn) attendance.checkIn = new Date(checkIn);
+    if (checkOut) attendance.checkOut = new Date(checkOut);
+
+    const updatedAttendance = await attendance.save();
+
+    // Log audit
+    await logAudit({
+      branchId,
+      userId: req.user.id,
+      role: req.user.role,
+      action: 'UPDATE',
+      module: 'STAFF_ATTENDANCE',
+      entityId: id,
+      oldData,
+      newData: {
+        status: updatedAttendance.status,
+        method: updatedAttendance.method,
+        checkIn: updatedAttendance.checkIn,
+        checkOut: updatedAttendance.checkOut,
+      },
+      ip: req.ip,
+      userAgent: req.get('user-agent'),
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Staff attendance updated successfully',
+      data: await updatedAttendance.populate('staffId', 'staffId name role'),
+    });
+  } catch (error) {
+    console.error('Update staff attendance error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while updating staff attendance',
+      error: config.isDevelopment() ? error.message : undefined,
+    });
+  }
+};
+
+/**
+ * Delete Staff Attendance
+ * POST /api/admin/attendance/staff/:id/delete
+ */
+const deleteStaffAttendance = async (req, res) => {
+  try {
+    const branchId = req.branchId;
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid attendance ID format',
+      });
+    }
+
+    const attendance = await StaffAttendance.findOneAndDelete({ _id: id, branchId });
+
+    if (!attendance) {
+      return res.status(404).json({
+        success: false,
+        message: 'Staff attendance not found',
+      });
+    }
+
+    // Log audit
+    await logAudit({
+      branchId,
+      userId: req.user.id,
+      role: req.user.role,
+      action: 'DELETE',
+      module: 'STAFF_ATTENDANCE',
+      entityId: id,
+      oldData: {
+        staffId: attendance.staffId,
+        date: attendance.date,
+        status: attendance.status,
+      },
+      ip: req.ip,
+      userAgent: req.get('user-agent'),
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Staff attendance deleted successfully',
+    });
+  } catch (error) {
+    console.error('Delete staff attendance error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while deleting staff attendance',
+      error: config.isDevelopment() ? error.message : undefined,
+    });
+  }
+};
+
 module.exports = {
   markStudentAttendance,
   markStaffAttendance,
@@ -551,4 +737,7 @@ module.exports = {
   getStudentAttendanceById,
   updateStudentAttendance,
   deleteStudentAttendance,
+  getStaffAttendanceById,
+  updateStaffAttendance,
+  deleteStaffAttendance,
 };

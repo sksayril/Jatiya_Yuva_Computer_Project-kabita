@@ -25,7 +25,7 @@ const generateCertificate = async (req, res) => {
     }
 
     // Verify student belongs to branch
-    const student = await Student.findOne({ _id: studentId, branchId });
+    const student = await Student.findOne({ studentId, branchId });
     if (!student) {
       return res.status(404).json({ success: false, message: 'Student not found' });
     }
@@ -42,7 +42,7 @@ const generateCertificate = async (req, res) => {
     // Check if student has passed all required exams
     const results = await Result.find({
       branchId,
-      studentId,
+      studentId: student._id,
       examId: { $in: exams.map(e => e._id) },
     });
 
@@ -55,7 +55,7 @@ const generateCertificate = async (req, res) => {
     }
 
     // Check if certificate already exists
-    const existingCert = await Certificate.findOne({ branchId, studentId, courseId });
+    const existingCert = await Certificate.findOne({ branchId, studentId: student._id, courseId });
     if (existingCert) {
       return res.status(409).json({
         success: false,
@@ -67,29 +67,16 @@ const generateCertificate = async (req, res) => {
     // Generate certificate ID
     const certificateId = await generateCertificateId(Certificate);
 
-    // Generate QR code
-    const qrData = JSON.stringify({
-      certificateId,
-      studentId: student.studentId,
-      branchId,
-    });
-    const qrCode = await generateQRCode(qrData);
-
     // Create certificate
     const certificate = await Certificate.create({
       branchId,
-      studentId,
+      studentId: student._id,
       courseId,
       certificateId,
       issueDate: new Date(),
       verified: true,
-      qrCode,
       generatedBy: req.user.id,
     });
-
-    // Generate certificate PDF (placeholder)
-    // TODO: Implement PDF generation
-    const certificatePdfUrl = '';
 
     await logAudit({
       branchId,
@@ -98,7 +85,7 @@ const generateCertificate = async (req, res) => {
       action: 'CREATE',
       module: 'CERTIFICATE',
       entityId: certificate._id,
-      newData: { certificateId, studentId },
+      newData: { certificateId, studentId: student.studentId },
       ip: req.ip,
       userAgent: req.get('user-agent'),
     });
@@ -106,10 +93,7 @@ const generateCertificate = async (req, res) => {
     res.status(201).json({
       success: true,
       message: 'Certificate generated successfully',
-      data: {
-        ...certificate.toObject(),
-        certificatePdfUrl,
-      },
+      data: certificate,
     });
   } catch (error) {
     console.error('Generate certificate error:', error);
@@ -131,7 +115,11 @@ const getCertificates = async (req, res) => {
     const { studentId, courseId } = req.query;
 
     const query = { branchId };
-    if (studentId) query.studentId = studentId;
+    if (studentId) {
+      const student = await Student.findOne({ studentId, branchId });
+      if (student) query.studentId = student._id;
+      else query.studentId = null; // Ensure no results if student not found
+    }
     if (courseId) query.courseId = courseId;
 
     const certificates = await Certificate.find(query)
