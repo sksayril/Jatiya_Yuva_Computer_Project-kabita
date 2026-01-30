@@ -1915,11 +1915,24 @@ Authorization: Bearer <JWT_TOKEN>
   "examType": "MONTHLY",
   "courseId": "<COURSE_ID>",
   "batchId": "<BATCH_ID>",
+  "teacherId": "<TEACHER_ID>",
   "examDate": "2024-01-30",
   "maxMarks": 100,
   "passingMarks": 40
 }
 ```
+
+**Required Fields:**
+- `name` - Exam name
+- `examType` - Exam type (MONTHLY, 6M, 1Y)
+- `courseId` - Course ID
+- `examDate` - Exam date (YYYY-MM-DD)
+- `maxMarks` - Maximum marks
+- `passingMarks` - Passing marks
+
+**Optional Fields:**
+- `batchId` - Batch ID (if exam is batch-specific)
+- `teacherId` - Teacher ID (optional - to assign teacher to exam during creation. Can also be assigned later using the Assign Teacher to Exam API)
 
 **Exam Type Options:**
 - `MONTHLY` - Monthly exam
@@ -1937,6 +1950,7 @@ Authorization: Bearer <JWT_TOKEN>
     "examType": "MONTHLY",
     "courseId": "<COURSE_ID>",
     "batchId": "<BATCH_ID>",
+    "teacherId": "<TEACHER_ID>",
     "examDate": "2024-01-30T00:00:00.000Z",
     "maxMarks": 100,
     "passingMarks": 40,
@@ -1945,6 +1959,8 @@ Authorization: Bearer <JWT_TOKEN>
   }
 }
 ```
+
+**Note:** If `teacherId` is provided, the system will verify that the teacher exists, is active, and belongs to the same branch. If the exam has a `batchId`, the system will also verify that the teacher is assigned to that batch.
 
 ---
 
@@ -1971,6 +1987,17 @@ Authorization: Bearer <JWT_TOKEN>
         "_id": "<COURSE_ID>",
         "name": "DCA",
         "courseCategory": "Basic"
+      },
+      "batchId": {
+        "_id": "<BATCH_ID>",
+        "name": "Morning Batch",
+        "timeSlot": "AM"
+      },
+      "teacherId": {
+        "_id": "<TEACHER_ID>",
+        "teacherId": "DHK001-TCH-001",
+        "name": "John Teacher",
+        "email": "teacher@example.com"
       },
       "examDate": "2024-01-30T00:00:00.000Z",
       "maxMarks": 100,
@@ -2004,7 +2031,13 @@ Authorization: Bearer <JWT_TOKEN>
     "batchId": {
       "_id": "<BATCH_ID>",
       "name": "Morning Batch",
-      "timeSlot": "9:00 AM - 11:00 AM"
+      "timeSlot": "AM"
+    },
+    "teacherId": {
+      "_id": "<TEACHER_ID>",
+      "teacherId": "DHK001-TCH-001",
+      "name": "John Teacher",
+      "email": "teacher@example.com"
     },
     "examDate": "2024-01-30T00:00:00.000Z",
     "maxMarks": 100,
@@ -2027,11 +2060,18 @@ Authorization: Bearer <JWT_TOKEN>
 ```json
 {
   "name": "Revised Monthly Test",
+  "examType": "MONTHLY",
+  "courseId": "<COURSE_ID>",
+  "batchId": "<BATCH_ID>",
+  "teacherId": "<TEACHER_ID>",
+  "examDate": "2024-01-30",
   "maxMarks": 50,
   "passingMarks": 15,
   "isActive": false
 }
 ```
+
+**Note:** All fields are optional. Only provide fields you want to update. If `teacherId` is provided, the system will verify that the teacher exists, is active, and belongs to the same branch.
 
 **Success Response (200):**
 ```json
@@ -2045,6 +2085,80 @@ Authorization: Bearer <JWT_TOKEN>
   }
 }
 ```
+
+---
+
+### Assign Teacher to Exam
+**Method:** `POST`  
+**URL:** `/api/admin/exams/:id/assign-teacher`  
+**Headers:** 
+- `Authorization: Bearer <JWT_TOKEN>`
+- `Content-Type: application/json`
+
+**Body (raw JSON):**
+```json
+{
+  "teacherId": "<TEACHER_ID>"
+}
+```
+
+**Required Fields:**
+- `teacherId` - Teacher ID to assign to the exam
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "message": "Teacher assigned to exam successfully",
+  "data": {
+    "_id": "<EXAM_ID>",
+    "name": "Monthly Test - January",
+    "examType": "MONTHLY",
+    "courseId": {
+      "_id": "<COURSE_ID>",
+      "name": "DCA",
+      "courseCategory": "Basic"
+    },
+    "batchId": {
+      "_id": "<BATCH_ID>",
+      "name": "Morning Batch",
+      "timeSlot": "AM"
+    },
+    "teacherId": {
+      "_id": "<TEACHER_ID>",
+      "teacherId": "DHK001-TCH-001",
+      "name": "John Teacher",
+      "email": "teacher@example.com"
+    },
+    "examDate": "2024-01-30T00:00:00.000Z",
+    "maxMarks": 100,
+    "passingMarks": 40,
+    "isActive": true
+  }
+}
+```
+
+**Error Response (400):**
+```json
+{
+  "success": false,
+  "message": "Teacher is not assigned to the exam's batch",
+  "note": "The exam is for a batch that has a different teacher assigned. Please assign the correct teacher or update the batch assignment."
+}
+```
+
+**Error Response (404):**
+```json
+{
+  "success": false,
+  "message": "Teacher not found or does not belong to this branch"
+}
+```
+
+**Note:** 
+- The system will verify that the teacher exists, is active, and belongs to the same branch.
+- If the exam has a `batchId` and that batch has a teacher assigned, the system will verify that the teacher being assigned matches the batch's assigned teacher.
+- This endpoint can also be used to update the teacher assignment for an exam.
 
 ---
 
@@ -2387,8 +2501,74 @@ Authorization: Bearer <JWT_TOKEN>
 
 ---
 
+### Get Inquiry by ID
+**Method:** `GET`  
+**URL:** `/api/admin/inquiries/:id`  
+**Headers:** `Authorization: Bearer <JWT_TOKEN>`
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "_id": "<INQUIRY_ID>",
+    "name": "Prospect Name",
+    "mobile": "1234567890",
+    "status": "NEW",
+    "handledBy": {
+      "name": "Admin Name",
+      "email": "admin@branch.com"
+    }
+  }
+}
+```
+
+---
+
+### Update Inquiry
+**Method:** `POST`  
+**URL:** `/api/admin/inquiries/:id/update`  
+**Headers:** 
+- `Authorization: Bearer <JWT_TOKEN>`
+- `Content-Type: application/json`
+
+**Body (raw JSON, all optional):**
+```json
+{
+  "name": "Updated Name",
+  "status": "CONTACTED",
+  "notes": "Spoke to the student, interested"
+}
+```
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "message": "Inquiry updated successfully",
+  "data": { ... }
+}
+```
+
+---
+
+### Delete Inquiry
+**Method:** `POST`  
+**URL:** `/api/admin/inquiries/:id/delete`  
+**Headers:** `Authorization: Bearer <JWT_TOKEN>`
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "message": "Inquiry deleted successfully"
+}
+```
+
+---
+
 ### Convert Inquiry to Student
-**Method:** `PATCH`  
+**Method:** `POST`  
 **URL:** `/api/admin/inquiries/:id/convert`  
 **Headers:** 
 - `Authorization: Bearer <JWT_TOKEN>`
@@ -2508,6 +2688,212 @@ Authorization: Bearer <JWT_TOKEN>
   ]
 }
 ```
+
+---
+
+### Get Recorded Class by ID
+**Method:** `GET`  
+**URL:** `/api/admin/recorded-classes/:id`  
+**Headers:** `Authorization: Bearer <JWT_TOKEN>`
+
+**Path Parameters:**
+- `id` (required) - Recorded class ID
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "_id": "<RECORDED_CLASS_ID>",
+    "title": "Introduction to Programming",
+    "description": "Basic programming concepts",
+    "batchId": {
+      "_id": "<BATCH_ID>",
+      "name": "Morning Batch",
+      "timeSlot": "9:00 AM - 11:00 AM"
+    },
+    "courseId": {
+      "_id": "<COURSE_ID>",
+      "name": "DCA",
+      "courseCategory": "Basic"
+    },
+    "videoUrl": "https://s3.../video.mp4",
+    "thumbnailUrl": "https://s3.../thumbnail.jpg",
+    "duration": 3600,
+    "expiryDate": "2024-12-31T00:00:00.000Z",
+    "accessControl": {
+      "allowedStudents": [
+        {
+          "_id": "<STUDENT_ID>",
+          "studentId": "DHK001-2024-001",
+          "studentName": "John Doe",
+          "name": "John Doe"
+        }
+      ],
+      "allowDownload": false
+    },
+    "uploadedBy": {
+      "_id": "<USER_ID>",
+      "name": "Admin Name",
+      "email": "admin@branch.com"
+    },
+    "isActive": true,
+    "createdAt": "2024-01-15T10:00:00.000Z",
+    "updatedAt": "2024-01-15T10:00:00.000Z"
+  }
+}
+```
+
+**Error Responses:**
+- `400` - Invalid recorded class ID format
+- `404` - Recorded class not found
+
+---
+
+### Update Recorded Class
+**Method:** `POST`  
+**URL:** `/api/admin/recorded-classes/:id/update`  
+**Headers:** `Authorization: Bearer <JWT_TOKEN>`  
+**Body (form-data or JSON):**
+
+**Path Parameters:**
+- `id` (required) - Recorded class ID
+
+**Body Fields (all optional):**
+- `batchId` (text) - Batch ID
+- `courseId` (text) - Course ID
+- `title` (text) - Class title
+- `description` (text) - Class description
+- `duration` (text) - Video duration in seconds
+- `expiryDate` (text) - Expiry date (ISO format)
+- `allowedStudents` (text) - Comma-separated student IDs or JSON array string
+- `allowDownload` (text) - true/false
+- `isActive` (text) - true/false
+- `video` (file, optional) - New video file (mp4/avi/mov/mkv/webm)
+- `thumbnail` (file, optional) - New thumbnail image (jpg/jpeg/png/webp)
+
+**Note:** 
+- All fields are optional - only provided fields will be updated
+- File uploads (video/thumbnail) are optional - only upload if you want to replace existing files
+- `allowedStudents` can be provided as:
+  - Comma-separated string: `"DHK001-2024-001, DHK001-2024-002"`
+  - JSON array string: `'["DHK001-2024-001", "DHK001-2024-002"]'`
+  - Array of ObjectIds: `["<OBJECT_ID_1>", "<OBJECT_ID_2>"]`
+
+**Example (JSON):**
+```json
+{
+  "title": "Updated Class Title",
+  "description": "Updated description",
+  "duration": 4200,
+  "expiryDate": "2024-12-31T00:00:00.000Z",
+  "allowedStudents": "DHK001-2024-001, DHK001-2024-002",
+  "allowDownload": true,
+  "isActive": true
+}
+```
+
+**Example (form-data with file upload):**
+- `title`: "Updated Class Title"
+- `description`: "Updated description"
+- `video`: <file> (optional - only if replacing video)
+- `thumbnail`: <file> (optional - only if replacing thumbnail)
+- `allowedStudents`: "DHK001-2024-001, DHK001-2024-002"
+- `allowDownload`: "true"
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "message": "Recorded class updated successfully",
+  "data": {
+    "_id": "<RECORDED_CLASS_ID>",
+    "title": "Updated Class Title",
+    "description": "Updated description",
+    "batchId": {
+      "_id": "<BATCH_ID>",
+      "name": "Morning Batch",
+      "timeSlot": "9:00 AM - 11:00 AM"
+    },
+    "courseId": {
+      "_id": "<COURSE_ID>",
+      "name": "DCA",
+      "courseCategory": "Basic"
+    },
+    "videoUrl": "https://s3.../new-video.mp4",
+    "thumbnailUrl": "https://s3.../new-thumbnail.jpg",
+    "duration": 4200,
+    "expiryDate": "2024-12-31T00:00:00.000Z",
+    "accessControl": {
+      "allowedStudents": [
+        {
+          "_id": "<STUDENT_ID_1>",
+          "studentId": "DHK001-2024-001",
+          "studentName": "John Doe"
+        },
+        {
+          "_id": "<STUDENT_ID_2>",
+          "studentId": "DHK001-2024-002",
+          "studentName": "Jane Smith"
+        }
+      ],
+      "allowDownload": true
+    },
+    "isActive": true,
+    "uploadedBy": {
+      "_id": "<USER_ID>",
+      "name": "Admin Name",
+      "email": "admin@branch.com"
+    },
+    "createdAt": "2024-01-15T10:00:00.000Z",
+    "updatedAt": "2024-01-20T14:30:00.000Z"
+  }
+}
+```
+
+**Error Responses:**
+- `400` - Invalid recorded class ID format
+- `400` - Invalid batchId or courseId format
+- `400` - Invalid allowedStudents format
+- `404` - Recorded class not found
+- `404` - Batch not found (if batchId provided)
+- `404` - Course not found (if courseId provided)
+
+**Notes:**
+- Partial updates are supported - only provided fields will be updated
+- If `batchId` or `courseId` is provided, they are validated to ensure they belong to the admin's branch
+- If `allowedStudents` contains student IDs (strings), they are automatically converted to ObjectIds
+- If some student IDs in `allowedStudents` are not found, a warning is logged but the update proceeds with found students
+- File uploads are optional - existing files are only replaced if new files are provided
+- All actions are logged in audit log
+
+---
+
+### Delete Recorded Class
+**Method:** `POST`  
+**URL:** `/api/admin/recorded-classes/:id/delete`  
+**Headers:** `Authorization: Bearer <JWT_TOKEN>`
+
+**Path Parameters:**
+- `id` (required) - Recorded class ID
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "message": "Recorded class deleted successfully"
+}
+```
+
+**Error Responses:**
+- `400` - Invalid recorded class ID format
+- `404` - Recorded class not found
+
+**Notes:**
+- Recorded class is permanently deleted from the database
+- This action cannot be undone
+- All actions are logged in audit log
+- Branch isolation is enforced - only recorded classes from the admin's branch can be deleted
 
 ---
 

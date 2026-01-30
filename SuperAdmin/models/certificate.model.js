@@ -2,10 +2,19 @@ const mongoose = require('mongoose');
 
 const certificateSchema = new mongoose.Schema(
   {
+    branchId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Branch',
+      required: true,
+    },
     studentId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Student',
       required: [true, 'Student is required'],
+    },
+    courseId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Course',
     },
     certificateId: {
       type: String,

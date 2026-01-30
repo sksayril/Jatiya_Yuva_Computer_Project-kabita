@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const Student = require('../../Admin/models/student.model');
 const { StudentAttendance, StaffAttendance } = require('../../Admin/models/attendance.model');
 const Payment = require('../../Admin/models/payment.model');
@@ -86,10 +87,12 @@ const getDashboardSummary = async (req, res) => {
 
     // Absent students alert (consecutive days)
     const consecutiveAbsentThreshold = 3;
+    const branchObjectId = new mongoose.Types.ObjectId(branchId);
+    const staffObjectId = new mongoose.Types.ObjectId(staffId);
     const studentsWithConsecutiveAbsent = await Student.aggregate([
       {
         $match: {
-          branchId: new require('mongoose').Types.ObjectId(branchId),
+          branchId: branchObjectId,
           status: 'ACTIVE',
         },
       },
@@ -103,7 +106,7 @@ const getDashboardSummary = async (req, res) => {
                 $expr: {
                   $and: [
                     { $eq: ['$studentId', '$$studentId'] },
-                    { $eq: ['$branchId', new require('mongoose').Types.ObjectId(branchId)] },
+                    { $eq: ['$branchId', branchObjectId] },
                     { $eq: ['$status', 'Absent'] },
                     {
                       $gte: [

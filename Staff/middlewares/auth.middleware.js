@@ -106,6 +106,7 @@ const authenticateStaff = async (req, res, next) => {
 /**
  * Middleware to authorize specific roles
  * Must be used after authenticateStaff
+ * Usage: authorizeRoles(['STAFF']) or authorizeRoles('STAFF', 'ADMIN')
  */
 const authorizeRoles = (...allowedRoles) => {
   return (req, res, next) => {
@@ -116,10 +117,13 @@ const authorizeRoles = (...allowedRoles) => {
       });
     }
 
-    if (!allowedRoles.includes(req.user.role)) {
+    // Flatten the allowedRoles array (handles both ['STAFF'] and 'STAFF' cases)
+    const roles = Array.isArray(allowedRoles[0]) ? allowedRoles[0] : allowedRoles;
+
+    if (!roles.includes(req.user.role)) {
       return res.status(403).json({
         success: false,
-        message: `Access denied. Required role: ${allowedRoles.join(' or ')}`,
+        message: `Access denied. Required role: ${roles.join(' or ')}`,
       });
     }
 

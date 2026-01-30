@@ -25,7 +25,7 @@ if (config.AWS_ACCESS_KEY_ID && config.AWS_SECRET_ACCESS_KEY) {
       key: (req, file, cb) => {
         const ext = path.extname(file.originalname).toLowerCase();
         let folder = 'files';
-        if (file.fieldname === 'image') folder = 'images';
+        if (file.fieldname === 'image' || file.fieldname === 'thumbnail') folder = 'images';
         else if (file.fieldname === 'pdf') folder = 'pdfs';
         else if (file.fieldname === 'video') folder = 'videos';
         else if (['studentPhoto', 'studentSignature', 'officeSignature', 'formScanImage'].includes(file.fieldname)) {
@@ -34,6 +34,8 @@ if (config.AWS_ACCESS_KEY_ID && config.AWS_SECRET_ACCESS_KEY) {
         const safeName = `${folder}/${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
         cb(null, safeName);
       },
+      // Handle S3 errors gracefully
+      acl: 'private', // Set ACL to private to avoid permission issues
     });
   } catch (error) {
     console.warn('S3 initialization failed, using local storage:', error.message);
@@ -62,21 +64,21 @@ if (!storage) {
 const fileFilter = (req, file, cb) => {
   const ext = path.extname(file.originalname).toLowerCase();
   
-  if (file.fieldname === 'image') {
+  if (file.fieldname === 'image' || file.fieldname === 'thumbnail') {
     const allowed = ['.jpg', '.jpeg', '.png', '.webp'];
-    return cb(allowed.includes(ext) ? null : new Error('Invalid image type'), allowed.includes(ext));
+    return cb(allowed.includes(ext) ? null : new Error(`Invalid ${file.fieldname} type. Allowed: ${allowed.join(', ')}`), allowed.includes(ext));
   }
   
   if (file.fieldname === 'pdf') {
-    return cb(ext === '.pdf' ? null : new Error('Invalid PDF type'), ext === '.pdf');
+    return cb(ext === '.pdf' ? null : new Error('Invalid PDF type. Only .pdf files are allowed'), ext === '.pdf');
   }
   
   if (file.fieldname === 'video') {
-    const allowed = ['.mp4', '.avi', '.mov', '.mkv'];
-    return cb(allowed.includes(ext) ? null : new Error('Invalid video type'), allowed.includes(ext));
+    const allowed = ['.mp4', '.avi', '.mov', '.mkv', '.webm'];
+    return cb(allowed.includes(ext) ? null : new Error(`Invalid video type. Allowed: ${allowed.join(', ')}`), allowed.includes(ext));
   }
   
-  return cb(new Error('Invalid file field'), false);
+  return cb(new Error(`Invalid file field: ${file.fieldname}. Expected: image, pdf, video, or thumbnail`), false);
 };
 
 const uploadFormImage = multer({

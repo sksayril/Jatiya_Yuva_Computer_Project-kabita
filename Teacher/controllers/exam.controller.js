@@ -14,31 +14,77 @@ const mongoose = require('mongoose');
 const getExams = async (req, res) => {
   try {
     const branchId = req.branchId;
-    const assignedBatches = req.assignedBatches;
+    const teacherId = req.teacherId;
+    const assignedBatches = req.assignedBatches || [];
     const { status = 'all' } = req.query; // all, upcoming, past
 
-    // Build query - only exams for assigned batches
+    // Convert assignedBatches to ObjectIds if they're strings
+    const assignedBatchIds = assignedBatches.map((batchId) => {
+      if (mongoose.Types.ObjectId.isValid(batchId)) {
+        return new mongoose.Types.ObjectId(batchId);
+      }
+      return batchId;
+    }).filter(Boolean); // Remove any null/undefined values
+
+    // Build query - exams assigned to this teacher OR exams for assigned batches
     const query = {
-      branchId,
-      status: 'ACTIVE',
-      $or: [
-        { batchId: { $in: assignedBatches } },
-        { targetBatches: { $in: assignedBatches } },
-      ],
+      branchId: new mongoose.Types.ObjectId(branchId),
+      isActive: true,
     };
 
-    // Filter by status
+    // Build $or condition for teacher or batch assignment
+    const orConditions = [];
+    
+    // Add teacher assignment condition
+    if (teacherId) {
+      orConditions.push({ teacherId: new mongoose.Types.ObjectId(teacherId) });
+    }
+    
+    // Add batch assignment condition
+    if (assignedBatchIds.length > 0) {
+      orConditions.push({ batchId: { $in: assignedBatchIds } });
+    }
+
+    // Only add $or if we have conditions
+    if (orConditions.length > 0) {
+      query.$or = orConditions;
+    } else {
+      // If no conditions, return empty result
+      return res.status(200).json({
+        success: true,
+        data: {
+          exams: [],
+          summary: {
+            total: 0,
+            upcoming: 0,
+            past: 0,
+          },
+        },
+      });
+    }
+
+    // Get all exams first (for summary calculation)
+    const allExamsQuery = { ...query };
     const now = new Date();
+    
+    // Filter by status (upcoming/past) for the actual results
     if (status === 'upcoming') {
       query.examDate = { $gte: now };
     } else if (status === 'past') {
       query.examDate = { $lt: now };
     }
 
+    // Get filtered exams
     const exams = await Exam.find(query)
       .populate('courseId', 'name courseCategory')
       .populate('batchId', 'name timeSlot')
+      .populate('teacherId', 'teacherId name email')
       .sort({ examDate: 1 });
+
+    // Get all exams for summary (without date filter)
+    const allExams = await Exam.find(allExamsQuery)
+      .select('_id examDate')
+      .lean();
 
     // Get results count for each exam
     const examsWithResults = await Promise.all(
@@ -48,30 +94,37 @@ const getExams = async (req, res) => {
           examId: exam._id,
         });
 
-        const studentsInBatch = await Student.countDocuments({
-          branchId,
-          batchId: exam.batchId,
-          status: 'ACTIVE',
-        });
+        let studentsInBatch = 0;
+        if (exam.batchId) {
+          studentsInBatch = await Student.countDocuments({
+            branchId,
+            batchId: exam.batchId._id || exam.batchId,
+            status: 'ACTIVE',
+          });
+        }
 
         return {
           ...exam.toObject(),
           resultsUploaded: resultsCount,
           totalStudents: studentsInBatch,
-          pendingResults: studentsInBatch - resultsCount,
+          pendingResults: Math.max(0, studentsInBatch - resultsCount),
           isUpcoming: new Date(exam.examDate) >= now,
         };
       })
     );
+
+    // Calculate summary from all exams
+    const upcomingCount = allExams.filter((e) => new Date(e.examDate) >= now).length;
+    const pastCount = allExams.filter((e) => new Date(e.examDate) < now).length;
 
     res.status(200).json({
       success: true,
       data: {
         exams: examsWithResults,
         summary: {
-          total: examsWithResults.length,
-          upcoming: examsWithResults.filter((e) => e.isUpcoming).length,
-          past: examsWithResults.filter((e) => !e.isUpcoming).length,
+          total: allExams.length,
+          upcoming: upcomingCount,
+          past: pastCount,
         },
       },
     });
@@ -96,7 +149,7 @@ const uploadMarks = async (req, res) => {
     const teacherId = req.teacherId;
     const assignedBatches = req.assignedBatches;
     const { examId } = req.params;
-    const { marks } = req.body; // Array of { studentId, marksObtained, remarks }
+    const { marks, isDraft = false } = req.body; // Array of { studentId, marksObtained, remarks }
 
     if (!marks || !Array.isArray(marks) || marks.length === 0) {
       return res.status(400).json({
@@ -141,22 +194,54 @@ const uploadMarks = async (req, res) => {
       status: 'ACTIVE',
     });
 
-    const studentIds = students.map((s) => s._id.toString());
+    // Create maps for both ObjectId and studentId string lookups
+    const studentByIdMap = {}; // Map by ObjectId string
+    const studentByStudentIdMap = {}; // Map by studentId string (e.g., "DHK006-2026-001")
+    
+    students.forEach((student) => {
+      const objectIdString = student._id.toString();
+      const studentIdString = student.studentId?.toUpperCase().trim();
+      
+      studentByIdMap[objectIdString] = student;
+      if (studentIdString) {
+        studentByStudentIdMap[studentIdString] = student;
+      }
+    });
 
     // Validate and process marks
     const results = [];
     const errors = [];
 
     for (const markData of marks) {
-      const { studentId, marksObtained, writtenMarks, mcqMarks, remarks, isDraft = false } = markData;
+      const { studentId, marksObtained, writtenMarks, mcqMarks, remarks } = markData;
 
       if (!studentId) {
         errors.push({ studentId: 'Missing', error: 'Student ID is required' });
         continue;
       }
 
+      // Find student by ObjectId or studentId string
+      let student = null;
+      let studentObjectId = null;
+      
+      const studentIdString = studentId.toString();
+      
+      // Check if it's an ObjectId
+      if (mongoose.Types.ObjectId.isValid(studentIdString) && studentIdString.length === 24) {
+        student = studentByIdMap[studentIdString];
+        if (student) {
+          studentObjectId = student._id;
+        }
+      } else {
+        // It's a student ID string (e.g., "DHK006-2026-001")
+        student = studentByStudentIdMap[studentIdString.toUpperCase().trim()];
+        if (student) {
+          studentObjectId = student._id;
+        }
+      }
+
       // Verify student belongs to batch
-      if (!studentIds.includes(studentId.toString())) {
+      if (!student || !studentObjectId) {
         errors.push({ studentId, error: 'Student not found in this batch' });
         continue;
       }
@@ -181,11 +266,11 @@ const uploadMarks = async (req, res) => {
       const percentage = Math.round((totalMarks / exam.maxMarks) * 100);
       const status = percentage >= exam.passingMarks ? 'PASS' : 'FAIL';
 
-      // Check if result already exists
+      // Check if result already exists (use ObjectId)
       const existingResult = await Result.findOne({
         branchId,
         examId,
-        studentId,
+        studentId: studentObjectId,
       });
 
       if (existingResult) {
@@ -197,11 +282,11 @@ const uploadMarks = async (req, res) => {
         await existingResult.save();
         results.push(existingResult);
       } else {
-        // Create new result
+        // Create new result (use ObjectId)
         const result = await Result.create({
           branchId,
           examId,
-          studentId,
+          studentId: studentObjectId,
           marksObtained: totalMarks,
           maxMarks: exam.maxMarks,
           percentage,

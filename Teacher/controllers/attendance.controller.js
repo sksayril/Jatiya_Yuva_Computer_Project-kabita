@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const { StudentAttendance } = require('../../Admin/models/attendance.model');
 const Student = require('../../Admin/models/student.model');
 const Batch = require('../../Admin/models/batch.model');
@@ -35,11 +36,23 @@ const markStudentAttendance = async (req, res) => {
     }
 
     // Verify student belongs to branch and batch
-    const student = await Student.findOne({
-      _id: studentId,
-      branchId,
-      batchId,
-    });
+    // Handle both ObjectId and student ID string (e.g., "DHK006-2026-001")
+    let student;
+    if (mongoose.Types.ObjectId.isValid(studentId) && studentId.length === 24) {
+      // studentId is an ObjectId
+      student = await Student.findOne({
+        _id: studentId,
+        branchId,
+        batchId,
+      });
+    } else {
+      // studentId is a student ID string (e.g., "DHK006-2026-001")
+      student = await Student.findOne({
+        studentId: studentId.toUpperCase().trim(),
+        branchId,
+        batchId,
+      });
+    }
 
     if (!student) {
       return res.status(404).json({
@@ -97,9 +110,11 @@ const markStudentAttendance = async (req, res) => {
     const todayEnd = new Date(today);
     todayEnd.setHours(23, 59, 59, 999);
 
+    // Use student's ObjectId for attendance query
+    const studentObjectId = student._id;
     const existingAttendance = await StudentAttendance.findOne({
       branchId,
-      studentId,
+      studentId: studentObjectId,
       batchId,
       date: { $gte: today, $lte: todayEnd },
       timeSlot: timeSlot || batch.timeSlot,
@@ -128,9 +143,10 @@ const markStudentAttendance = async (req, res) => {
     }
 
     // Create attendance record
+    // Use student's ObjectId for attendance record
     const attendance = await StudentAttendance.create({
       branchId,
-      studentId,
+      studentId: studentObjectId,
       batchId,
       date: currentTime,
       timeSlot: timeSlot || batch.timeSlot,

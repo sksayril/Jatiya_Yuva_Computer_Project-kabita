@@ -57,6 +57,7 @@ const inquirySchema = new mongoose.Schema(
 );
 
 inquirySchema.index({ branchId: 1, status: 1 });
+inquirySchema.index({ branchId: 1, source: 1 });
 inquirySchema.index({ mobile: 1 });
 
 // Check if model already exists to avoid overwrite error

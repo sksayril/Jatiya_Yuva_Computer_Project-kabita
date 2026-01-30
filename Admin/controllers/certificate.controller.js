@@ -2,10 +2,12 @@ const Certificate = require('../models/certificate.model');
 const Student = require('../models/student.model');
 const Result = require('../models/result.model');
 const Exam = require('../models/exam.model');
+const Course = require('../../SuperAdmin/models/course.model');
 const { generateCertificateId } = require('../utils/idGenerator');
 const { generateQRCode } = require('../utils/qrGenerator');
 const { logAudit } = require('../utils/auditLogger');
 const config = require('../config/env.config');
+const mongoose = require('mongoose');
 
 /**
  * Generate Certificate
@@ -115,20 +117,64 @@ const getCertificates = async (req, res) => {
     const { studentId, courseId } = req.query;
 
     const query = { branchId };
-    if (studentId) {
-      const student = await Student.findOne({ studentId, branchId });
-      if (student) query.studentId = student._id;
-      else query.studentId = null; // Ensure no results if student not found
-    }
-    if (courseId) query.courseId = courseId;
 
+    // Handle studentId filter (can be studentName, studentId string, or MongoDB _id)
+    if (studentId) {
+      const studentQuery = { branchId };
+      if (mongoose.Types.ObjectId.isValid(studentId)) {
+        studentQuery.$or = [{ _id: studentId }, { studentId: studentId }];
+      } else {
+        studentQuery.$or = [
+          { studentId: studentId },
+          { studentName: { $regex: studentId, $options: 'i' } }
+        ];
+      }
+
+      const student = await Student.findOne(studentQuery);
+      if (student) {
+        query.studentId = student._id;
+      } else {
+        // If student not found, we still want to query but with a non-existent ID to return empty array
+        query.studentId = new mongoose.Types.ObjectId();
+      }
+    }
+
+    // Handle courseId filter
+    if (courseId) {
+      if (mongoose.Types.ObjectId.isValid(courseId)) {
+        query.courseId = courseId;
+      } else {
+        // Try to find course by name if not a valid ObjectId
+        const course = await Course.findOne({
+          name: { $regex: `^${courseId}$`, $options: 'i' }
+        });
+        if (course) {
+          query.courseId = course._id;
+        } else {
+          query.courseId = new mongoose.Types.ObjectId();
+        }
+      }
+    }
+
+    // Fetch certificates with populated data
     const certificates = await Certificate.find(query)
-      .populate('studentId', 'studentId name')
-      .populate('courseId', 'name courseCategory')
+      .populate({
+        path: 'studentId',
+        select: 'studentId studentName name mobile religion gender category'
+      })
+      .populate({
+        path: 'courseId',
+        select: 'name courseCategory duration'
+      })
+      .populate({
+        path: 'generatedBy',
+        select: 'name email role'
+      })
       .sort({ issueDate: -1 });
 
     res.status(200).json({
       success: true,
+      count: certificates.length,
       data: certificates,
     });
   } catch (error) {

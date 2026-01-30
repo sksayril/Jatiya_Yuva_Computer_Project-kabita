@@ -74,6 +74,31 @@ Complete API documentation for the Teacher Panel of National Youth Computer Cent
 
 ---
 
+### Teacher Logout
+**Method:** `POST`  
+**URL:** `/api/teacher/logout`  
+**Headers:** `Authorization: Bearer <JWT_TOKEN>`
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "message": "Logged out successfully"
+}
+```
+
+**Error Response (401):**
+```json
+{
+  "success": false,
+  "message": "Invalid or expired token"
+}
+```
+
+**Note:** This is a stateless logout endpoint. The client should delete the JWT token from storage (localStorage, sessionStorage, or secure cookie) after receiving a successful logout response.
+
+---
+
 ## Dashboard
 
 ### Get Dashboard Summary

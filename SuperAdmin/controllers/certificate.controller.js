@@ -1,7 +1,10 @@
 const Certificate = require('../models/certificate.model');
 const MasterSetting = require('../models/masterSetting.model');
+const Course = require('../models/course.model');
+const Student = require('../models/student.model');
 const config = require('../config/env.config');
 const { logAudit } = require('../utils/auditLogger');
+const mongoose = require('mongoose');
 
 const upsertCertificateSetting = async (req, res, type) => {
   try {
@@ -63,9 +66,53 @@ const verifyCertificate = async (req, res) => {
   }
 };
 
+/**
+ * Get All Certificates (Super Admin)
+ * GET /api/super-admin/certificates
+ */
+const getCertificates = async (req, res) => {
+  try {
+    const { studentId, courseId, branchId } = req.query;
+    const query = {};
+
+    if (branchId) query.branchId = branchId;
+    if (studentId) query.studentId = studentId;
+    if (courseId) query.courseId = courseId;
+
+    const certificates = await Certificate.find(query)
+      .populate({
+        path: 'studentId',
+        select: 'studentId studentName name'
+      })
+      .populate({
+        path: 'courseId',
+        select: 'name courseCategory'
+      })
+      .populate({
+        path: 'branchId',
+        select: 'name code'
+      })
+      .sort({ issueDate: -1 });
+
+    res.status(200).json({
+      success: true,
+      count: certificates.length,
+      data: certificates,
+    });
+  } catch (error) {
+    console.error('Get certificates error (SuperAdmin):', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while fetching certificates',
+      error: config.isDevelopment() ? error.message : undefined,
+    });
+  }
+};
+
 module.exports = {
   createCertificateTemplate,
   createCertificateRules,
   verifyCertificate,
+  getCertificates,
 };
 

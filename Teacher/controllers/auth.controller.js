@@ -107,6 +107,29 @@ const login = async (req, res) => {
   }
 };
 
+/**
+ * Teacher Logout
+ * POST /api/teacher/logout
+ * Stateless JWT logout - client should delete token
+ */
+const logout = async (req, res) => {
+  try {
+    // Stateless JWT logout: client should delete token
+    res.status(200).json({
+      success: true,
+      message: 'Logged out successfully',
+    });
+  } catch (error) {
+    console.error('Teacher logout error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error during logout',
+      error: config.isDevelopment() ? error.message : undefined,
+    });
+  }
+};
+
 module.exports = {
   login,
+  logout,
 };

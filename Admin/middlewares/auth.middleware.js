@@ -9,7 +9,7 @@ const config = require('../config/env.config');
 const authenticateAdmin = async (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
-    
+
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return res.status(401).json({
         success: false,
@@ -46,7 +46,8 @@ const authenticateAdmin = async (req, res, next) => {
     }
 
     // Find User by ID
-    const user = await User.findById(decoded.userId);
+    // Optimized User lookup: Only fetch essential fields for auth check
+    const user = await User.findById(decoded.userId).select('role branchId isActive').lean();
     if (!user) {
       return res.status(401).json({
         success: false,

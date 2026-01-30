@@ -27,6 +27,10 @@ const examSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Batch',
     },
+    teacherId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Teacher',
+    },
     examDate: {
       type: Date,
       required: [true, 'Exam date is required'],
