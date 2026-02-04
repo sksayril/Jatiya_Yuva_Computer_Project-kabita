@@ -102,6 +102,7 @@ const uploadVideo = multer({
   limits: { fileSize: config.MAX_FILE_SIZE * 10 }, // 50MB for videos
 }).fields([
   { name: 'video', maxCount: 1 },
+  { name: 'pdf', maxCount: 1 },
   { name: 'thumbnail', maxCount: 1 },
 ]);
 
