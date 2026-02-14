@@ -31,17 +31,33 @@ const manualRegistration = async (req, res) => {
     }
 
     // Extract data from new nested structure
-    const {
-      admission,
-      student: studentDataFromBody,
-      family_details,
-      contact_details,
-      address: addressData,
-      education,
-      office_use,
-      studentId: providedStudentId,
-      status: providedStatus,
-    } = req.body;
+    // Parse JSON strings if they come from form-data
+    let admission = req.body.admission;
+    let studentDataFromBody = req.body.student;
+    let family_details = req.body.family_details;
+    let contact_details = req.body.contact_details;
+    let addressData = req.body.address;
+    let education = req.body.education;
+    let office_use = req.body.office_use;
+    const studentId = req.body.studentId;
+    const providedStatus = req.body.status;
+
+    // Parse JSON strings if they are strings (from form-data)
+    try {
+      if (typeof admission === 'string') admission = JSON.parse(admission);
+      if (typeof studentDataFromBody === 'string') studentDataFromBody = JSON.parse(studentDataFromBody);
+      if (typeof family_details === 'string') family_details = JSON.parse(family_details);
+      if (typeof contact_details === 'string') contact_details = JSON.parse(contact_details);
+      if (typeof addressData === 'string') addressData = JSON.parse(addressData);
+      if (typeof education === 'string') education = JSON.parse(education);
+      if (typeof office_use === 'string') office_use = JSON.parse(office_use);
+    } catch (parseError) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid JSON format in nested objects. Please ensure all nested objects are valid JSON strings.',
+        error: config.isDevelopment() ? parseError.message : undefined,
+      });
+    }
 
     // Map nested structure to flat structure for backward compatibility
     const admissionDate = admission?.admission_date;
@@ -217,9 +233,10 @@ const manualRegistration = async (req, res) => {
     }
 
     // Generate Student ID if AUTO or not provided
-    let studentId = providedStudentId;
-    if (!studentId || studentId === 'AUTO') {
-      studentId = await generateStudentId(branch.code, Student);
+    const providedStudentId = studentId;
+    let finalStudentId = providedStudentId;
+    if (!finalStudentId || finalStudentId === 'AUTO') {
+      finalStudentId = await generateStudentId(branch.code, Student);
     }
 
     // Handle file uploads
@@ -236,9 +253,84 @@ const manualRegistration = async (req, res) => {
       ? req.files.formScanImage[0].location || req.files.formScanImage[0].path
       : '';
 
-    // Generate login credentials
-    const loginEmail = email || `${studentId.toLowerCase()}@${branch.code.toLowerCase()}.edu`;
-    const password = `STU${studentId.split('-')[2] || Math.random().toString(36).substring(7)}`;
+    // Generate unique password based on student ID
+    // This ensures each student gets a different password based on their unique student ID
+    const generateStudentPassword = async (studentId) => {
+      // Parse student ID parts (e.g., YUVA-0002-2026-001 or DHK001-2024-001)
+      const parts = studentId.split('-');
+      
+      let passwordBase = '';
+      if (parts.length >= 3) {
+        // Format: BRANCH-YEAR-SEQUENCE or BRANCH-SEQUENCE-YEAR-SEQUENCE
+        const branchPart = parts[0].substring(0, 3).toUpperCase(); // First 3 chars of branch code
+        let yearPart = '';
+        let sequencePart = '';
+        
+        if (parts.length === 4) {
+          // Format: YUVA-0002-2026-001
+          yearPart = parts[2].substring(2); // Last 2 digits of year (26 from 2026)
+          sequencePart = parts[3]; // Sequence number (001)
+        } else {
+          // Format: DHK001-2024-001
+          yearPart = parts[1].substring(2); // Last 2 digits of year (24 from 2024)
+          sequencePart = parts[2]; // Sequence number (001)
+        }
+        
+        // Create password base: BRANCH + YEAR + SEQUENCE (e.g., YUV26001 or DHK24001)
+        passwordBase = `${branchPart}${yearPart}${sequencePart}`;
+      } else {
+        // Fallback: use student ID without hyphens
+        passwordBase = studentId.replace(/-/g, '').substring(0, 8).toUpperCase();
+      }
+      
+      // Add uniqueness using hash of full student ID
+      let hash = 0;
+      for (let i = 0; i < studentId.length; i++) {
+        const char = studentId.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash = hash & hash; // Convert to 32-bit integer
+      }
+      const hashPart = Math.abs(hash).toString().substring(0, 4);
+      
+      // Combine: BASE + HASH (e.g., YUV260011234 or DHK240011234)
+      let uniquePassword = `${passwordBase}${hashPart}`;
+      
+      // Ensure password is at least 8 characters
+      if (uniquePassword.length < 8) {
+        uniquePassword = uniquePassword + Math.random().toString(36).substring(2, 10 - uniquePassword.length).toUpperCase();
+      }
+      
+      // Limit to 16 characters max
+      uniquePassword = uniquePassword.substring(0, 16);
+      
+      // Check if this password already exists for another student
+      const existingStudent = await Student.findOne({
+        'loginCredentials.password': uniquePassword,
+      });
+      
+      // If password exists, add more uniqueness
+      if (existingStudent) {
+        const additionalUniqueness = Math.random().toString(36).substring(2, 6).toUpperCase();
+        uniquePassword = `${passwordBase}${hashPart}${additionalUniqueness}`.substring(0, 16);
+        
+        // Double-check uniqueness
+        const stillExists = await Student.findOne({
+          'loginCredentials.password': uniquePassword,
+        });
+        
+        if (stillExists) {
+          // Last resort: use timestamp-based uniqueness
+          const timestamp = Date.now().toString(36).substring(5, 9).toUpperCase();
+          uniquePassword = `${passwordBase}${timestamp}`.substring(0, 16);
+        }
+      }
+      
+      return uniquePassword;
+    };
+
+    // Generate login credentials with unique password based on student ID
+    const loginEmail = email || `${finalStudentId.toLowerCase()}@${branch.code.toLowerCase()}.edu`;
+    const password = await generateStudentPassword(finalStudentId);
 
     // Calculate initial fees (from course if available)
     const totalFees = course ? course.courseFees || 0 : 0;
@@ -250,7 +342,7 @@ const manualRegistration = async (req, res) => {
     // Prepare student data
     const studentData = {
       branchId,
-      studentId,
+      studentId: finalStudentId,
       studentName: studentName.trim(),
       name: studentName.trim(), // Keep for backward compatibility
       guardianName: guardianName?.trim(),
@@ -317,7 +409,7 @@ const manualRegistration = async (req, res) => {
       action: 'CREATE',
       module: 'STUDENT',
       entityId: student._id,
-      newData: { studentId, studentName, mobileNumber },
+      newData: { studentId: finalStudentId, studentName, mobileNumber },
       ip: req.ip,
       userAgent: req.get('user-agent'),
     });
@@ -328,6 +420,7 @@ const manualRegistration = async (req, res) => {
       data: {
         studentId: student.studentId,
         studentName: student.studentName,
+        password: student.loginCredentials?.password || password,
         loginCredentials: student.loginCredentials,
       },
     });
@@ -707,9 +800,16 @@ const getStudents = async (req, res) => {
       .populate('batchId', 'name timeSlot')
       .sort({ createdAt: -1 });
 
+    // Map students to include password in response for Admin visibility
+    const studentsData = students.map(student => {
+      const studentObj = student.toObject();
+      studentObj.password = student.loginCredentials?.password || null;
+      return studentObj;
+    });
+
     res.status(200).json({
       success: true,
-      data: students,
+      data: studentsData,
     });
   } catch (error) {
     console.error('Get students error:', error);
@@ -739,9 +839,16 @@ const getStudentById = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Student not found' });
     }
 
+    // Include password in response for Admin visibility
+    const studentData = student.toObject();
+    studentData.password = student.loginCredentials?.password || null;
+    
+    // Keep loginCredentials for backward compatibility, but also add password at root level
+    // loginCredentials is already included in studentData
+
     res.status(200).json({
       success: true,
-      data: student,
+      data: studentData,
     });
   } catch (error) {
     console.error('Get student error:', error);

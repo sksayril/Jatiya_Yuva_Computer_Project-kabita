@@ -31,6 +31,12 @@ if (config.AWS_ACCESS_KEY_ID && config.AWS_SECRET_ACCESS_KEY) {
         else if (['studentPhoto', 'studentSignature', 'officeSignature', 'formScanImage'].includes(file.fieldname)) {
           folder = `students/${file.fieldname}`;
         }
+        else if (file.fieldname === 'teacherImage') {
+          folder = 'teachers';
+        }
+        else if (file.fieldname === 'staffImage') {
+          folder = 'staff';
+        }
         const safeName = `${folder}/${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
         cb(null, safeName);
       },
@@ -51,6 +57,14 @@ if (!storage) {
       if (['studentPhoto', 'studentSignature', 'officeSignature', 'formScanImage'].includes(file.fieldname)) {
         uploadPath = path.join(uploadPath, 'students', file.fieldname);
       }
+      // Create subfolder for teacher files
+      else if (file.fieldname === 'teacherImage') {
+        uploadPath = path.join(uploadPath, 'teachers');
+      }
+      // Create subfolder for staff files
+      else if (file.fieldname === 'staffImage') {
+        uploadPath = path.join(uploadPath, 'staff');
+      }
       cb(null, uploadPath);
     },
     filename: (req, file, cb) => {
@@ -64,7 +78,7 @@ if (!storage) {
 const fileFilter = (req, file, cb) => {
   const ext = path.extname(file.originalname).toLowerCase();
   
-  if (file.fieldname === 'image' || file.fieldname === 'thumbnail') {
+  if (file.fieldname === 'image' || file.fieldname === 'thumbnail' || file.fieldname === 'teacherImage' || file.fieldname === 'staffImage') {
     const allowed = ['.jpg', '.jpeg', '.png', '.webp'];
     return cb(allowed.includes(ext) ? null : new Error(`Invalid ${file.fieldname} type. Allowed: ${allowed.join(', ')}`), allowed.includes(ext));
   }
@@ -123,9 +137,25 @@ const uploadStudentFiles = multer({
   { name: 'formScanImage', maxCount: 1 },
 ]);
 
+// Teacher image upload
+const uploadTeacherImage = multer({
+  storage,
+  fileFilter,
+  limits: { fileSize: config.MAX_FILE_SIZE },
+}).single('teacherImage');
+
+// Staff image upload
+const uploadStaffImage = multer({
+  storage,
+  fileFilter,
+  limits: { fileSize: config.MAX_FILE_SIZE },
+}).single('staffImage');
+
 module.exports = {
   uploadFormImage,
   uploadCourseFiles,
   uploadVideo,
   uploadStudentFiles,
+  uploadTeacherImage,
+  uploadStaffImage,
 };

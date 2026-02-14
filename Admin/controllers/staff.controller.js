@@ -18,12 +18,21 @@ const createStaff = async (req, res) => {
       mobile,
       salaryType,
       salaryRate,
+      password,
     } = req.body;
 
     if (!name || !email || !mobile || !salaryType || salaryRate === undefined) {
       return res.status(400).json({
         success: false,
         message: 'Missing required fields: name, email, mobile, salaryType, salaryRate',
+      });
+    }
+
+    // Password is required
+    if (!password) {
+      return res.status(400).json({
+        success: false,
+        message: 'Password is required',
       });
     }
 
@@ -34,13 +43,19 @@ const createStaff = async (req, res) => {
       });
     }
 
-    // Check for duplicate email (check both Staff and Teacher models)
-    const existingStaff = await Staff.findOne({ email: email.toLowerCase().trim() });
-    const existingTeacher = await Teacher.findOne({ email: email.toLowerCase().trim() });
+    // Check for duplicate email within the same branch (check both Staff and Teacher models)
+    const existingStaff = await Staff.findOne({ 
+      email: email.toLowerCase().trim(),
+      branchId: branchId 
+    });
+    const existingTeacher = await Teacher.findOne({ 
+      email: email.toLowerCase().trim(),
+      branchId: branchId 
+    });
     if (existingStaff || existingTeacher) {
       return res.status(409).json({
         success: false,
-        message: 'Email already registered',
+        message: 'Email already registered in this branch',
       });
     }
 
@@ -54,9 +69,26 @@ const createStaff = async (req, res) => {
     // Generate Staff ID (role is always STAFF for this endpoint)
     const staffId = await generateStaffId(branch.code, 'STAFF', Staff);
 
-    // Generate login credentials
+    // Use provided password (required)
     const loginEmail = email.toLowerCase().trim();
-    const password = `STF${staffId.split('-')[2]}`; // Simple password generation
+    const staffPassword = password;
+
+    // Handle staff image upload (if provided)
+    const staffImageFile = req.file;
+    let imageUrl = '';
+    if (staffImageFile) {
+      // multer-s3 provides location as full S3 URL
+      // Format: https://bucket-name.s3.region.amazonaws.com/staff/filename
+      imageUrl = staffImageFile.location || staffImageFile.path || '';
+      
+      // Verify file was uploaded successfully
+      if (!imageUrl) {
+        return res.status(500).json({
+          success: false,
+          message: 'Failed to upload staff image. Please check your S3 configuration.',
+        });
+      }
+    }
 
     // Create staff (role is always STAFF)
     const staff = await Staff.create({
@@ -68,10 +100,12 @@ const createStaff = async (req, res) => {
       role: 'STAFF',
       salaryType,
       salaryRate: Number(salaryRate),
+      imageUrl: imageUrl || '',
       isActive: true,
+      originalPassword: staffPassword, // Store original password for Admin visibility
       loginCredentials: {
         email: loginEmail,
-        password,
+        password: staffPassword,
       },
     });
 
@@ -91,15 +125,26 @@ const createStaff = async (req, res) => {
       userAgent: req.get('user-agent'),
     });
 
+    // Get staff with originalPassword
+    const staffData = await Staff.findById(staff._id).select('+originalPassword');
+
     // Remove qrCode and idCardUrl from response
-    const staffData = staff.toObject();
-    delete staffData.qrCode;
-    delete staffData.idCardUrl;
+    const responseData = staffData.toObject();
+    delete responseData.qrCode;
+    delete responseData.idCardUrl;
+    delete responseData.loginCredentials;
+    delete responseData.originalPassword;
+    
+    // Add password to response
+    responseData.password = staffData.originalPassword;
+    
+    // Include imageUrl in response
+    responseData.imageUrl = staffData.imageUrl || '';
 
     res.status(201).json({
       success: true,
       message: 'Staff created successfully',
-      data: staffData,
+      data: responseData,
     });
   } catch (error) {
     console.error('Create staff error:', error);
@@ -125,13 +170,17 @@ const getStaff = async (req, res) => {
     if (isActive !== undefined) query.isActive = isActive === 'true';
 
     const staff = await Staff.find(query)
+      .select('+originalPassword')
       .sort({ createdAt: -1 });
 
-    // Remove qrCode and idCardUrl from all staff records
+    // Map staff to include password in response
     const staffList = staff.map(s => {
       const staffData = s.toObject();
       delete staffData.qrCode;
       delete staffData.idCardUrl;
+      delete staffData.loginCredentials;
+      staffData.password = s.originalPassword || null;
+      delete staffData.originalPassword;
       return staffData;
     });
 
@@ -188,14 +237,24 @@ const calculateStaffSalary = async (staffId, month, year) => {
 const createTeacher = async (req, res) => {
   try {
     const branchId = req.branchId;
-    const {
+    let {
       name,
       email,
       mobile,
       assignedBatches,
       salaryType,
       salaryRate,
+      password,
     } = req.body;
+
+    // Parse assignedBatches if it's a string (from form-data)
+    if (typeof assignedBatches === 'string') {
+      try {
+        assignedBatches = assignedBatches ? JSON.parse(assignedBatches) : [];
+      } catch (e) {
+        assignedBatches = [];
+      }
+    }
 
     // Validate required fields
     if (!name || !email || !mobile || !salaryType || salaryRate === undefined) {
@@ -205,11 +264,19 @@ const createTeacher = async (req, res) => {
       });
     }
 
-    // assignedBatches is optional - validate only if provided
-    if (assignedBatches && (!Array.isArray(assignedBatches) || assignedBatches.length === 0)) {
+    // Password is required
+    if (!password) {
       return res.status(400).json({
         success: false,
-        message: 'assignedBatches must be an array with at least one batch ID if provided',
+        message: 'Password is required',
+      });
+    }
+
+    // assignedBatches is optional - validate only if provided
+    if (assignedBatches !== undefined && !Array.isArray(assignedBatches)) {
+      return res.status(400).json({
+        success: false,
+        message: 'assignedBatches must be an array',
       });
     }
 
@@ -221,13 +288,19 @@ const createTeacher = async (req, res) => {
       });
     }
 
-    // Check for duplicate email (check both Staff and Teacher models)
-    const existingStaff = await Staff.findOne({ email: email.toLowerCase().trim() });
-    const existingTeacher = await Teacher.findOne({ email: email.toLowerCase().trim() });
+    // Check for duplicate email within the same branch (check both Staff and Teacher models)
+    const existingStaff = await Staff.findOne({ 
+      email: email.toLowerCase().trim(),
+      branchId: branchId 
+    });
+    const existingTeacher = await Teacher.findOne({ 
+      email: email.toLowerCase().trim(),
+      branchId: branchId 
+    });
     if (existingStaff || existingTeacher) {
       return res.status(409).json({
         success: false,
-        message: 'Email already registered',
+        message: 'Email already registered in this branch',
       });
     }
 
@@ -258,26 +331,49 @@ const createTeacher = async (req, res) => {
     // Generate Teacher ID
     const teacherId = await generateTeacherId(branch.code, Teacher);
 
-    // Generate login credentials
+    // Use provided password (required)
     const loginEmail = email.toLowerCase().trim();
-    const password = `TCH${teacherId.split('-')[2] || Math.random().toString(36).substring(7)}`;
+    const teacherPassword = password;
 
+    // Handle teacher image upload (if provided)
+    const teacherImageFile = req.file;
+    let imageUrl = '';
+    if (teacherImageFile) {
+      // multer-s3 provides location as full S3 URL
+      // Format: https://bucket-name.s3.region.amazonaws.com/teachers/filename
+      imageUrl = teacherImageFile.location || teacherImageFile.path || '';
+      
+      // Verify file was uploaded successfully
+      if (!imageUrl) {
+        return res.status(500).json({
+          success: false,
+          message: 'Failed to upload teacher image. Please check your S3 configuration.',
+        });
+      }
+    }
+
+    // Ensure branchId is set from authenticated admin (prevent override)
+    const teacherBranchId = req.branchId || branchId;
+    
     // Create teacher in Teacher model (without QR code)
+    // branchId is automatically set from authenticated admin's branch
     const teacher = await Teacher.create({
-      branchId,
+      branchId: teacherBranchId, // Always use authenticated admin's branchId
       teacherId,
       name: name.trim(),
       email: loginEmail,
       mobile: mobile.trim(),
-      assignedBatches: assignedBatches || [],
+      assignedBatches: assignedBatches && Array.isArray(assignedBatches) ? assignedBatches : [],
       salaryType,
       salaryRate: Number(salaryRate),
       currentMonthClasses: 0,
       currentMonthSalary: 0,
+      imageUrl: imageUrl || '',
       isActive: true,
+      originalPassword: teacherPassword, // Store original password for Admin visibility
       loginCredentials: {
         email: loginEmail,
-        password,
+        password: teacherPassword,
       },
     });
 
@@ -302,21 +398,25 @@ const createTeacher = async (req, res) => {
       userAgent: req.get('user-agent'),
     });
 
+    // Get teacher with originalPassword
+    const teacherData = await Teacher.findById(teacher._id).select('+originalPassword');
+    
     res.status(201).json({
       success: true,
       message: 'Teacher created successfully',
       data: {
-        _id: teacher._id,
-        teacherId: teacher.teacherId,
-        name: teacher.name,
-        email: teacher.email,
-        mobile: teacher.mobile,
-        assignedBatches: teacher.assignedBatches,
-        salaryType: teacher.salaryType,
-        salaryRate: teacher.salaryRate,
-        loginCredentials: teacher.loginCredentials,
-        isActive: teacher.isActive,
-        createdAt: teacher.createdAt,
+        _id: teacherData._id,
+        teacherId: teacherData.teacherId,
+        name: teacherData.name,
+        email: teacherData.email,
+        mobile: teacherData.mobile,
+        assignedBatches: teacherData.assignedBatches,
+        salaryType: teacherData.salaryType,
+        salaryRate: teacherData.salaryRate,
+        imageUrl: teacherData.imageUrl || '',
+        password: teacherData.originalPassword, // Include original password in response
+        isActive: teacherData.isActive,
+        createdAt: teacherData.createdAt,
       },
     });
   } catch (error) {
@@ -344,13 +444,24 @@ const getTeachers = async (req, res) => {
     }
 
     const teachers = await Teacher.find(query)
+      .select('+originalPassword')
       .populate('assignedBatches', 'name timeSlot courseId')
       .sort({ createdAt: -1 });
 
+    // Map teachers to include password in response
+    const teachersData = teachers.map(teacher => {
+      const teacherObj = teacher.toObject();
+      teacherObj.password = teacher.originalPassword || null;
+      // Remove loginCredentials as we're using password directly
+      delete teacherObj.loginCredentials;
+      delete teacherObj.originalPassword;
+      return teacherObj;
+    });
+
     res.status(200).json({
       success: true,
-      count: teachers.length,
-      data: teachers,
+      count: teachersData.length,
+      data: teachersData,
     });
   } catch (error) {
     console.error('Get teachers error:', error);
@@ -372,6 +483,7 @@ const getTeacherById = async (req, res) => {
     const { id } = req.params;
 
     const teacher = await Teacher.findOne({ _id: id, branchId })
+      .select('+originalPassword')
       .populate('assignedBatches', 'name timeSlot courseId')
       .populate('branchId', 'name code');
 
@@ -382,9 +494,15 @@ const getTeacherById = async (req, res) => {
       });
     }
 
+    const teacherData = teacher.toObject();
+    teacherData.password = teacher.originalPassword || null;
+    // Remove loginCredentials as we're using password directly
+    delete teacherData.loginCredentials;
+    delete teacherData.originalPassword;
+
     res.status(200).json({
       success: true,
-      data: teacher,
+      data: teacherData,
     });
   } catch (error) {
     console.error('Get teacher error:', error);
@@ -436,16 +554,20 @@ const updateTeacher = async (req, res) => {
     if (name !== undefined) teacher.name = name.trim();
     if (email !== undefined) {
       const newEmail = email.toLowerCase().trim();
-      // Check for duplicate email (excluding current teacher)
+      // Check for duplicate email within the same branch (excluding current teacher)
       const existingTeacher = await Teacher.findOne({
         email: newEmail,
+        branchId: branchId,
         _id: { $ne: id },
       });
-      const existingStaff = await Staff.findOne({ email: newEmail });
+      const existingStaff = await Staff.findOne({ 
+        email: newEmail,
+        branchId: branchId 
+      });
       if (existingTeacher || existingStaff) {
         return res.status(409).json({
           success: false,
-          message: 'Email already registered',
+          message: 'Email already registered in this branch',
         });
       }
       teacher.email = newEmail;
@@ -624,7 +746,9 @@ const getStaffById = async (req, res) => {
     const branchId = req.branchId;
     const { id } = req.params;
 
-    const staff = await Staff.findOne({ _id: id, branchId });
+    const staff = await Staff.findOne({ _id: id, branchId })
+      .select('+originalPassword');
+    
     if (!staff) {
       return res.status(404).json({
         success: false,
@@ -636,6 +760,9 @@ const getStaffById = async (req, res) => {
     const staffData = staff.toObject();
     delete staffData.qrCode;
     delete staffData.idCardUrl;
+    delete staffData.loginCredentials;
+    staffData.password = staff.originalPassword || null;
+    delete staffData.originalPassword;
 
     res.status(200).json({
       success: true,
@@ -692,16 +819,20 @@ const updateStaff = async (req, res) => {
     
     if (email !== undefined) {
       const newEmail = email.toLowerCase().trim();
-      // Check for duplicate email (excluding current staff)
+      // Check for duplicate email within the same branch (excluding current staff)
       const existingStaff = await Staff.findOne({
         email: newEmail,
+        branchId: branchId,
         _id: { $ne: id },
       });
-      const existingTeacher = await Teacher.findOne({ email: newEmail });
+      const existingTeacher = await Teacher.findOne({ 
+        email: newEmail,
+        branchId: branchId 
+      });
       if (existingStaff || existingTeacher) {
         return res.status(409).json({
           success: false,
-          message: 'Email already registered',
+          message: 'Email already registered in this branch',
         });
       }
       staff.email = newEmail;
@@ -748,10 +879,16 @@ const updateStaff = async (req, res) => {
       userAgent: req.get('user-agent'),
     });
 
+    // Get updated staff with originalPassword
+    const updatedStaff = await Staff.findById(staff._id).select('+originalPassword');
+
     // Remove qrCode and idCardUrl from response
-    const staffData = staff.toObject();
+    const staffData = updatedStaff.toObject();
     delete staffData.qrCode;
     delete staffData.idCardUrl;
+    delete staffData.loginCredentials;
+    staffData.password = updatedStaff.originalPassword || null;
+    delete staffData.originalPassword;
 
     res.status(200).json({
       success: true,

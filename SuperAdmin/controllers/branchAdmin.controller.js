@@ -27,6 +27,7 @@ const createBranchAdmin = async (req, res) => {
       name: name.trim(),
       email: email.toLowerCase().trim(),
       password: password,
+      originalPassword: password, // Store original password for SuperAdmin visibility
       role: 'ADMIN',
       branchId,
       isActive: true,
@@ -40,7 +41,10 @@ const createBranchAdmin = async (req, res) => {
       ip: req.ip,
     });
 
-    res.status(201).json({ success: true, data: admin });
+    // Return admin with original password visible
+    const adminData = admin.toObject();
+    adminData.originalPassword = admin.originalPassword;
+    res.status(201).json({ success: true, data: adminData });
   } catch (error) {
     console.error('Create branch admin error:', error);
     res.status(500).json({
@@ -58,7 +62,7 @@ const blockBranchAdmin = async (req, res) => {
       { _id: id, role: 'ADMIN' },
       { isActive: false },
       { new: true }
-    );
+    ).select('+originalPassword');
     if (!admin) {
       return res.status(404).json({ success: false, message: 'Admin not found' });
     }
@@ -71,7 +75,9 @@ const blockBranchAdmin = async (req, res) => {
       ip: req.ip,
     });
 
-    res.status(200).json({ success: true, data: admin });
+    const adminData = admin.toObject();
+    adminData.originalPassword = admin.originalPassword || null;
+    res.status(200).json({ success: true, data: adminData });
   } catch (error) {
     console.error('Block branch admin error:', error);
     res.status(500).json({
@@ -89,7 +95,7 @@ const unblockBranchAdmin = async (req, res) => {
       { _id: id, role: 'ADMIN' },
       { isActive: true },
       { new: true }
-    );
+    ).select('+originalPassword');
     if (!admin) {
       return res.status(404).json({ success: false, message: 'Admin not found' });
     }
@@ -102,7 +108,9 @@ const unblockBranchAdmin = async (req, res) => {
       ip: req.ip,
     });
 
-    res.status(200).json({ success: true, data: admin });
+    const adminData = admin.toObject();
+    adminData.originalPassword = admin.originalPassword || null;
+    res.status(200).json({ success: true, data: adminData });
   } catch (error) {
     console.error('Unblock branch admin error:', error);
     res.status(500).json({
@@ -123,9 +131,12 @@ const resetBranchAdminPassword = async (req, res) => {
 
     const admin = await User.findOneAndUpdate(
       { _id: id, role: 'ADMIN' },
-      { password: password },
+      { 
+        password: password,
+        originalPassword: password // Store original password for SuperAdmin visibility
+      },
       { new: true }
-    );
+    ).select('+originalPassword');
 
     if (!admin) {
       return res.status(404).json({ success: false, message: 'Admin not found' });
@@ -139,7 +150,14 @@ const resetBranchAdminPassword = async (req, res) => {
       ip: req.ip,
     });
 
-    res.status(200).json({ success: true, message: 'Password reset successfully' });
+    // Return admin with original password visible
+    const adminData = admin.toObject();
+    adminData.originalPassword = admin.originalPassword;
+    res.status(200).json({ 
+      success: true, 
+      message: 'Password reset successfully',
+      data: adminData
+    });
   } catch (error) {
     console.error('Reset admin password error:', error);
     res.status(500).json({
@@ -162,9 +180,17 @@ const getBranchAdmins = async (req, res) => {
     
     const admins = await User.find(query)
       .populate('branchId', 'name code')
+      .select('+originalPassword') // Include originalPassword field
       .sort({ createdAt: -1 });
     
-    res.status(200).json({ success: true, data: admins });
+    // Map admins to include originalPassword in response
+    const adminsData = admins.map(admin => {
+      const adminObj = admin.toObject();
+      adminObj.originalPassword = admin.originalPassword || null;
+      return adminObj;
+    });
+    
+    res.status(200).json({ success: true, data: adminsData });
   } catch (error) {
     console.error('Get branch admins error:', error);
     res.status(500).json({
@@ -195,7 +221,7 @@ const updateBranchAdmin = async (req, res) => {
       { _id: id, role: 'ADMIN' },
       update,
       { new: true }
-    );
+    ).select('+originalPassword');
 
     if (!admin) {
       return res.status(404).json({ success: false, message: 'Admin not found' });
@@ -209,7 +235,9 @@ const updateBranchAdmin = async (req, res) => {
       ip: req.ip,
     });
 
-    res.status(200).json({ success: true, data: admin });
+    const adminData = admin.toObject();
+    adminData.originalPassword = admin.originalPassword || null;
+    res.status(200).json({ success: true, data: adminData });
   } catch (error) {
     console.error('Update branch admin error:', error);
     res.status(500).json({

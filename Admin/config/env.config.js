@@ -32,7 +32,7 @@ const envConfig = {
   QR_CODE_SIZE: parseInt(process.env.QR_CODE_SIZE, 10) || 200,
   
   // File Upload
-  MAX_FILE_SIZE: parseInt(process.env.MAX_FILE_SIZE, 10) || 5 * 1024 * 1024, // 5MB
+  MAX_FILE_SIZE: parseInt(process.env.MAX_FILE_SIZE, 10) || 50 * 1024 * 1024, // 50MB default
 };
 
 const validateEnv = () => {

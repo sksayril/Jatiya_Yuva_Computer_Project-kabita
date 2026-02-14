@@ -18,10 +18,21 @@ const batchSchema = new mongoose.Schema(
       required: [true, 'Time slot is required'],
       trim: true,
     },
+    weekdays: {
+      type: [String],
+      required: [true, 'Weekdays are required'],
+      validate: {
+        validator: function(v) {
+          const validDays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+          return v.length > 0 && v.every(day => validDays.includes(day));
+        },
+        message: 'Weekdays must be an array of valid days: Sunday, Monday, Tuesday, Wednesday, Thursday, Friday, Saturday'
+      }
+    },
     monthlyFee: {
       type: Number,
-      required: [true, 'Monthly fee is required'],
       min: 0,
+      default: null, // Optional - can use course monthlyFees if not provided
     },
     isKidsBatch: {
       type: Boolean,
@@ -62,6 +73,7 @@ const batchSchema = new mongoose.Schema(
 
 batchSchema.index({ branchId: 1, isActive: 1 });
 batchSchema.index({ courseId: 1 });
+batchSchema.index({ branchId: 1, timeSlot: 1, weekdays: 1 }); // For duplicate detection
 
 // Check if model already exists to avoid overwrite error
 const Batch = mongoose.models.Batch || mongoose.model('Batch', batchSchema);

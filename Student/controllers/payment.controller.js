@@ -4,6 +4,7 @@ const Branch = require('../../SuperAdmin/models/branch.model');
 const { generateReceiptNumber } = require('../../Admin/utils/idGenerator');
 const { logAudit } = require('../utils/auditLogger');
 const config = require('../config/env.config');
+const mongoose = require('mongoose');
 
 /**
  * Create Online Payment
@@ -120,6 +121,8 @@ const createPayment = async (req, res) => {
 /**
  * Get Payment History
  * GET /api/student/payments
+ * Comprehensive payment history with statistics and upcoming payment information
+ * Uses aggregation for optimal performance
  */
 const getPayments = async (req, res) => {
   try {
@@ -127,25 +130,245 @@ const getPayments = async (req, res) => {
     const branchId = req.branchId;
     const { page = 1, limit = 20 } = req.query;
 
-    const query = { branchId, studentId };
+    const studentObjectId = new mongoose.Types.ObjectId(studentId);
+    const branchObjectId = new mongoose.Types.ObjectId(branchId);
+
+    // Current month info
+    const today = new Date();
+    const currentMonth = today.toLocaleString('default', { month: 'long' });
+    const currentYear = today.getFullYear();
+
+    // Get student info for monthly fees and admission date
+    const student = await Student.findById(studentId)
+      .select('monthlyFees admissionDate totalFees paidAmount dueAmount')
+      .lean();
+
+    if (!student) {
+      return res.status(404).json({
+        success: false,
+        message: 'Student not found',
+      });
+    }
+
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
-    const [payments, total] = await Promise.all([
-      Payment.find(query)
+    // Parallel queries using aggregation for optimal performance
+    const [
+      payments,
+      total,
+      paymentStats,
+      monthlyPayment,
+      monthlyBreakdown,
+    ] = await Promise.all([
+      // Get paginated payments
+      Payment.find({
+        branchId: branchObjectId,
+        studentId: studentObjectId,
+      })
         .sort({ createdAt: -1 })
         .skip(skip)
-        .limit(parseInt(limit)),
-      Payment.countDocuments(query),
+        .limit(parseInt(limit))
+        .lean(),
+
+      // Total count
+      Payment.countDocuments({
+        branchId: branchObjectId,
+        studentId: studentObjectId,
+      }),
+
+      // Payment statistics using aggregation
+      Payment.aggregate([
+        {
+          $match: {
+            branchId: branchObjectId,
+            studentId: studentObjectId,
+          },
+        },
+        {
+          $group: {
+            _id: null,
+            totalPayments: { $sum: 1 },
+            totalPaid: { $sum: { $subtract: ['$amount', '$discount'] } },
+            averageAmount: { $avg: { $subtract: ['$amount', '$discount'] } },
+            firstPayment: { $min: '$createdAt' },
+            lastPayment: { $max: '$createdAt' },
+          },
+        },
+        {
+          $project: {
+            _id: 0,
+            totalPayments: 1,
+            totalPaid: 1,
+            averageAmount: { $round: ['$averageAmount', 2] },
+            firstPayment: 1,
+            lastPayment: 1,
+          },
+        },
+      ]),
+
+      // Current month payment status
+      Payment.aggregate([
+        {
+          $match: {
+            branchId: branchObjectId,
+            studentId: studentObjectId,
+            month: currentMonth,
+            year: currentYear,
+          },
+        },
+        {
+          $group: {
+            _id: null,
+            monthlyPaid: { $sum: { $subtract: ['$amount', '$discount'] } },
+            paymentCount: { $sum: 1 },
+          },
+        },
+        {
+          $project: {
+            _id: 0,
+            monthlyPaid: 1,
+            paymentCount: 1,
+          },
+        },
+      ]),
+
+      // Monthly breakdown (last 12 months)
+      Payment.aggregate([
+        {
+          $match: {
+            branchId: branchObjectId,
+            studentId: studentObjectId,
+          },
+        },
+        {
+          $group: {
+            _id: {
+              month: '$month',
+              year: '$year',
+            },
+            totalPaid: { $sum: { $subtract: ['$amount', '$discount'] } },
+            paymentCount: { $sum: 1 },
+          },
+        },
+        {
+          $project: {
+            _id: 0,
+            month: '$_id.month',
+            year: '$_id.year',
+            totalPaid: 1,
+            paymentCount: 1,
+          },
+        },
+        {
+          $sort: { year: -1, month: -1 },
+        },
+        {
+          $limit: 12,
+        },
+      ]),
     ]);
+
+    // Process statistics
+    const stats = paymentStats[0] || {
+      totalPayments: 0,
+      totalPaid: 0,
+      averageAmount: 0,
+      firstPayment: null,
+      lastPayment: null,
+    };
+
+    const monthlyPaymentData = monthlyPayment[0] || {
+      monthlyPaid: 0,
+      paymentCount: 0,
+    };
+
+    // Calculate upcoming payment information
+    const monthlyFee = student.monthlyFees || 0;
+    const monthlyPaid = monthlyPaymentData.monthlyPaid || 0;
+    const monthlyDueAmount = Math.max(0, monthlyFee - monthlyPaid);
+    const monthlyStatus = monthlyPaid >= monthlyFee ? 'Paid' : 'Due';
+
+    // Calculate next due date
+    let nextDueDate = null;
+    let daysUntilDue = null;
+    if (student.admissionDate) {
+      const admissionDate = new Date(student.admissionDate);
+      const monthsSinceAdmission =
+        (today.getFullYear() - admissionDate.getFullYear()) * 12 +
+        (today.getMonth() - admissionDate.getMonth());
+      nextDueDate = new Date(admissionDate);
+      nextDueDate.setMonth(admissionDate.getMonth() + monthsSinceAdmission + 1);
+
+      // Calculate days until due
+      const daysDiff = Math.ceil((nextDueDate - today) / (1000 * 60 * 60 * 24));
+      daysUntilDue = daysDiff;
+    }
+
+    // Calculate total fees and progress
+    const totalFees = student.totalFees || 0;
+    const paidAmount = stats.totalPaid || student.paidAmount || 0;
+    const dueAmount = Math.max(0, totalFees - paidAmount);
+    const paymentProgress = totalFees > 0 ? Math.round((paidAmount / totalFees) * 100) : 0;
+
+    // Build upcoming payment info
+    const upcomingPayment = {
+      month: currentMonth,
+      year: currentYear,
+      monthlyFee: monthlyFee,
+      monthlyPaid: monthlyPaid,
+      dueAmount: monthlyDueAmount,
+      status: monthlyStatus,
+      nextDueDate: nextDueDate,
+      daysUntilDue: daysUntilDue,
+      isOverdue: daysUntilDue !== null && daysUntilDue < 0,
+      message:
+        monthlyStatus === 'Paid'
+          ? `Payment for ${currentMonth} ${currentYear} is complete`
+          : monthlyDueAmount > 0
+          ? `You have ₹${monthlyDueAmount} due for ${currentMonth} ${currentYear}`
+          : `No payment due for ${currentMonth} ${currentYear}`,
+    };
 
     res.status(200).json({
       success: true,
       data: {
-        payments,
+        payments: payments.map((p) => ({
+          _id: p._id,
+          amount: p.amount,
+          discount: p.discount || 0,
+          netAmount: p.amount - (p.discount || 0),
+          paymentMode: p.paymentMode,
+          receiptNumber: p.receiptNumber,
+          month: p.month,
+          year: p.year,
+          description: p.description,
+          transactionId: p.transactionId,
+          receiptPdfUrl: p.receiptPdfUrl || '',
+          createdAt: p.createdAt,
+          updatedAt: p.updatedAt,
+        })),
+        statistics: {
+          totalPayments: stats.totalPayments,
+          totalPaid: stats.totalPaid,
+          averageAmount: stats.averageAmount,
+          totalFees: totalFees,
+          paidAmount: paidAmount,
+          dueAmount: dueAmount,
+          paymentProgress: paymentProgress,
+          firstPayment: stats.firstPayment,
+          lastPayment: stats.lastPayment,
+        },
+        upcomingPayment: upcomingPayment,
+        monthlyBreakdown: monthlyBreakdown.map((m) => ({
+          month: m.month,
+          year: m.year,
+          totalPaid: m.totalPaid,
+          paymentCount: m.paymentCount,
+        })),
         pagination: {
           page: parseInt(page),
           limit: parseInt(limit),
-          total,
+          total: total,
           pages: Math.ceil(total / parseInt(limit)),
         },
       },

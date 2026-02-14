@@ -4,6 +4,7 @@
  */
 
 const express = require('express');
+const cors = require('cors');
 const path = require('path');
 require('dotenv').config();
 
@@ -26,8 +27,23 @@ const app = express();
 // ============================================
 // MIDDLEWARE
 // ============================================
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+
+// CORS Configuration - Allow all origins including localhost
+const corsOptions = {
+  origin: true, // Allow all origins (more reliable than '*')
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
+  exposedHeaders: ['Content-Type', 'Authorization'],
+  credentials: false,
+  preflightContinue: false,
+  optionsSuccessStatus: 204
+};
+
+app.use(cors(corsOptions));
+
+// Increase body size limit to 50MB for file uploads
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Static file serving for uploads
 app.use('/uploads', express.static(path.join(__dirname, 'SuperAdmin', 'uploads')));
@@ -96,6 +112,16 @@ app.use((req, res) => {
 // Global error handler
 app.use((err, req, res, next) => {
   console.error('❌ Unhandled error:', err);
+  
+  // Handle payload too large error
+  if (err.type === 'entity.too.large') {
+    return res.status(413).json({
+      success: false,
+      message: 'Request entity too large. Maximum size is 50MB.',
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined,
+    });
+  }
+  
   res.status(err.status || 500).json({
     success: false,
     message: err.message || 'Internal server error',

@@ -12,19 +12,88 @@ const config = require('../config/env.config');
 const createBatch = async (req, res) => {
   try {
     const branchId = req.branchId;
-    const { name, timeSlot, monthlyFee, isKidsBatch, discountPercentage, teacherId, courseId, maxStudents } = req.body;
+    const { name, timeSlot, monthlyFee, isKidsBatch, discountPercentage, teacherId, courseId, maxStudents, weekdays } = req.body;
 
-    if (!name || !timeSlot || monthlyFee === undefined || !courseId) {
+    if (!name || !timeSlot || !courseId || !weekdays) {
       return res.status(400).json({
         success: false,
-        message: 'Missing required fields: name, timeSlot, monthlyFee, courseId',
+        message: 'Missing required fields: name, timeSlot, courseId, weekdays',
       });
     }
+
+    // Validate weekdays
+    const validDays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    if (!Array.isArray(weekdays) || weekdays.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'weekdays must be a non-empty array',
+      });
+    }
+
+    // Normalize and validate weekday names
+    const normalizedWeekdays = weekdays.map(day => {
+      const trimmed = day.trim();
+      const capitalized = trimmed.charAt(0).toUpperCase() + trimmed.slice(1).toLowerCase();
+      if (!validDays.includes(capitalized)) {
+        return null;
+      }
+      return capitalized;
+    }).filter(day => day !== null);
+
+    if (normalizedWeekdays.length === 0 || normalizedWeekdays.length !== weekdays.length) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid weekdays. Valid days: Sunday, Monday, Tuesday, Wednesday, Thursday, Friday, Saturday',
+      });
+    }
+
+    // Sort weekdays for consistent comparison
+    const sortedWeekdays = normalizedWeekdays.sort((a, b) => {
+      const dayOrder = { Sunday: 0, Monday: 1, Tuesday: 2, Wednesday: 3, Thursday: 4, Friday: 5, Saturday: 6 };
+      return dayOrder[a] - dayOrder[b];
+    });
 
     // Verify course exists
     const course = await Course.findById(courseId);
     if (!course) {
       return res.status(404).json({ success: false, message: 'Course not found' });
+    }
+
+    // Use course monthlyFees if monthlyFee is not provided
+    const batchMonthlyFee = monthlyFee !== undefined ? Number(monthlyFee) : (course.monthlyFees || null);
+
+    // Check for duplicate batch with same timeSlot and weekdays in the same branch
+    // Normalize timeSlot for comparison (trim and case-insensitive)
+    const normalizedTimeSlot = timeSlot.trim().toLowerCase();
+    
+    // Find all active batches in the branch
+    const allBatches = await Batch.find({
+      branchId,
+      isActive: true,
+    });
+    
+    // Check for exact match of timeSlot (case-insensitive) and same weekdays
+    const existingBatch = allBatches.find(batch => {
+      const batchTimeSlot = (batch.timeSlot || '').trim().toLowerCase();
+      const batchWeekdays = Array.isArray(batch.weekdays) ? [...batch.weekdays].sort() : [];
+      const checkWeekdays = [...sortedWeekdays].sort();
+      
+      return batchTimeSlot === normalizedTimeSlot &&
+             batchWeekdays.length === checkWeekdays.length &&
+             batchWeekdays.every((day, idx) => day === checkWeekdays[idx]);
+    });
+
+    if (existingBatch) {
+      return res.status(409).json({
+        success: false,
+        message: `A batch with the same time slot (${timeSlot}) and weekdays (${sortedWeekdays.join(', ')}) already exists in this branch`,
+        existingBatch: {
+          _id: existingBatch._id,
+          name: existingBatch.name,
+          timeSlot: existingBatch.timeSlot,
+          weekdays: existingBatch.weekdays,
+        },
+      });
     }
 
     // Verify teacher if provided
@@ -48,7 +117,8 @@ const createBatch = async (req, res) => {
       branchId,
       name: name.trim(),
       timeSlot: timeSlot.trim(),
-      monthlyFee: Number(monthlyFee),
+      weekdays: sortedWeekdays,
+      monthlyFee: batchMonthlyFee, // Use provided monthlyFee or course monthlyFees
       isKidsBatch: isKidsBatch || false,
       discountPercentage: finalDiscountPercentage,
       teacherId: teacherId || null,
@@ -171,12 +241,43 @@ const updateBatch = async (req, res) => {
     const { id } = req.params;
     const update = {};
 
-    const allowedFields = ['name', 'timeSlot', 'monthlyFee', 'teacherId', 'maxStudents', 'isActive'];
+    const allowedFields = ['name', 'timeSlot', 'monthlyFee', 'teacherId', 'maxStudents', 'isActive', 'weekdays'];
     allowedFields.forEach((field) => {
       if (req.body[field] !== undefined) {
         update[field] = req.body[field];
       }
     });
+
+    // Validate and normalize weekdays if provided
+    if (update.weekdays !== undefined) {
+      const validDays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+      if (!Array.isArray(update.weekdays) || update.weekdays.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'weekdays must be a non-empty array',
+        });
+      }
+
+      const normalizedWeekdays = update.weekdays.map(day => {
+        const trimmed = day.trim();
+        const capitalized = trimmed.charAt(0).toUpperCase() + trimmed.slice(1).toLowerCase();
+        if (!validDays.includes(capitalized)) {
+          return null;
+        }
+        return capitalized;
+      }).filter(day => day !== null);
+
+      if (normalizedWeekdays.length === 0 || normalizedWeekdays.length !== update.weekdays.length) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid weekdays. Valid days: Sunday, Monday, Tuesday, Wednesday, Thursday, Friday, Saturday',
+        });
+      }
+
+      // Sort weekdays for consistent comparison
+      const dayOrder = { Sunday: 0, Monday: 1, Tuesday: 2, Wednesday: 3, Thursday: 4, Friday: 5, Saturday: 6 };
+      update.weekdays = normalizedWeekdays.sort((a, b) => dayOrder[a] - dayOrder[b]);
+    }
 
     // Verify teacher if provided
     if (req.body.teacherId) {
@@ -188,14 +289,56 @@ const updateBatch = async (req, res) => {
 
     // Kids batch discount is read-only, don't allow changes
     if (req.body.discountPercentage !== undefined) {
-      const batch = await Batch.findOne({ _id: id, branchId });
-      if (batch && batch.isKidsBatch) {
+      const existingBatch = await Batch.findOne({ _id: id, branchId });
+      if (existingBatch && existingBatch.isKidsBatch) {
         return res.status(400).json({
           success: false,
           message: 'Discount percentage is locked for kids batches',
         });
       }
       update.discountPercentage = req.body.discountPercentage;
+    }
+
+    // Check for duplicate batch with same timeSlot and weekdays if timeSlot or weekdays are being updated
+    if (update.timeSlot || update.weekdays) {
+      const existingBatch = await Batch.findOne({ _id: id, branchId });
+      if (!existingBatch) {
+        return res.status(404).json({ success: false, message: 'Batch not found' });
+      }
+
+      const checkTimeSlot = update.timeSlot ? update.timeSlot.trim().toLowerCase() : existingBatch.timeSlot.toLowerCase();
+      const checkWeekdays = update.weekdays || existingBatch.weekdays;
+
+      // Find all active batches in the branch (excluding current batch)
+      const allBatches = await Batch.find({
+        branchId,
+        _id: { $ne: id },
+        isActive: true,
+      });
+      
+      // Check for exact match of timeSlot (case-insensitive) and same weekdays
+      const duplicateBatch = allBatches.find(batch => {
+        const batchTimeSlot = (batch.timeSlot || '').trim().toLowerCase();
+        const batchWeekdays = Array.isArray(batch.weekdays) ? [...batch.weekdays].sort() : [];
+        const checkWeekdaysSorted = [...checkWeekdays].sort();
+        
+        return batchTimeSlot === checkTimeSlot.toLowerCase() &&
+               batchWeekdays.length === checkWeekdaysSorted.length &&
+               batchWeekdays.every((day, idx) => day === checkWeekdaysSorted[idx]);
+      });
+
+      if (duplicateBatch) {
+        return res.status(409).json({
+          success: false,
+          message: `A batch with the same time slot (${update.timeSlot || existingBatch.timeSlot}) and weekdays (${checkWeekdays.join(', ')}) already exists in this branch`,
+          existingBatch: {
+            _id: duplicateBatch._id,
+            name: duplicateBatch.name,
+            timeSlot: duplicateBatch.timeSlot,
+            weekdays: duplicateBatch.weekdays,
+          },
+        });
+      }
     }
 
     const batch = await Batch.findOneAndUpdate(
@@ -313,7 +456,7 @@ const assignTeacherToBatch = async (req, res) => {
   try {
     const branchId = req.branchId;
     const { id } = req.params;
-    const { teacherId, course } = req.body;
+    const { teacherId } = req.body;
 
     if (!teacherId) {
       return res.status(400).json({
@@ -326,16 +469,6 @@ const assignTeacherToBatch = async (req, res) => {
     const batch = await Batch.findOne({ _id: id, branchId });
     if (!batch) {
       return res.status(404).json({ success: false, message: 'Batch not found' });
-    }
-
-    // Verify course matches batch course if course supplied
-    if (course) {
-      if (batch.courseId.toString() !== course) {
-        return res.status(400).json({
-          success: false,
-          message: 'Course ID does not match batch course',
-        });
-      }
     }
 
     // Verify teacher exists and belongs to same branch
@@ -364,8 +497,6 @@ const assignTeacherToBatch = async (req, res) => {
     });
 
     // Log audit
-    const newData = { teacherId };
-    if (course) newData.course = course;
     await logAudit({
       branchId,
       userId: req.user.id,
@@ -374,7 +505,7 @@ const assignTeacherToBatch = async (req, res) => {
       module: 'BATCH',
       entityId: batch._id,
       oldData: { teacherId: oldTeacherId },
-      newData,
+      newData: { teacherId },
       ip: req.ip,
       userAgent: req.get('user-agent'),
     });

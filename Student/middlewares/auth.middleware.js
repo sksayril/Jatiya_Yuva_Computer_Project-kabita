@@ -117,10 +117,13 @@ const authorizeRoles = (...allowedRoles) => {
       });
     }
 
-    if (!allowedRoles.includes(req.user.role)) {
+    // Flatten allowedRoles in case an array was passed
+    const roles = allowedRoles.flat();
+
+    if (!roles.includes(req.user.role)) {
       return res.status(403).json({
         success: false,
-        message: `Access denied. Required role: ${allowedRoles.join(' or ')}`,
+        message: `Access denied. Required role: ${roles.join(' or ')}`,
       });
     }
 

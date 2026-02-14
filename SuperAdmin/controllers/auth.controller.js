@@ -174,9 +174,62 @@ const logout = async (req, res) => {
   }
 };
 
+/**
+ * Get Current Super Admin Profile (Who I Am)
+ * GET /api/super-admin/me
+ * Returns the authenticated super admin's profile information
+ */
+const getMe = async (req, res) => {
+  try {
+    // req.user is set by authenticateSuperAdmin middleware
+    const userId = req.user.id || req.user.userId;
+
+    // Fetch full super admin details
+    const superAdmin = await SuperAdmin.findById(userId)
+      .select('-password');
+
+    if (!superAdmin) {
+      return res.status(404).json({
+        success: false,
+        message: 'Super Admin not found',
+      });
+    }
+
+    // Check if account is active
+    if (!superAdmin.isActive) {
+      return res.status(403).json({
+        success: false,
+        message: 'Account disabled',
+      });
+    }
+
+    // Return super admin profile
+    res.status(200).json({
+      success: true,
+      user: {
+        id: superAdmin._id.toString(),
+        name: superAdmin.name,
+        email: superAdmin.email,
+        role: superAdmin.role,
+        isActive: superAdmin.isActive,
+        createdAt: superAdmin.createdAt,
+        updatedAt: superAdmin.updatedAt,
+      },
+    });
+  } catch (error) {
+    console.error('Get me error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while fetching profile',
+      error: config.isDevelopment() ? error.message : undefined,
+    });
+  }
+};
+
 module.exports = {
   signup,
   login,
   logout,
+  getMe,
 };
 

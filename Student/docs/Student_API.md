@@ -83,23 +83,176 @@ Complete API documentation for the Student Panel of National Youth Computer Cent
 **URL:** `/api/student/dashboard/summary`  
 **Headers:** `Authorization: Bearer <JWT_TOKEN>`
 
+**Description:** Comprehensive dashboard endpoint that provides all essential student information including profile, flow status, attendance, fees, academic progress, and notifications in a single response.
+
 **Success Response (200):**
 ```json
 {
   "success": true,
   "data": {
+    "student": {
+      "studentId": "DHK001-2024-001",
+      "studentName": "John Doe",
+      "email": "john@example.com",
+      "mobileNumber": "9876543210",
+      "status": "ACTIVE",
+      "profilePhoto": "/uploads/students/photo.jpg"
+    },
+    "flow": {
+      "admissionDate": "2024-01-15T00:00:00.000Z",
+      "officeEntryDate": "2024-01-15T00:00:00.000Z",
+      "daysSinceAdmission": 45,
+      "currentStage": "ACTIVE",
+      "milestones": {
+        "registered": true,
+        "active": true,
+        "courseAssigned": true,
+        "batchAssigned": true,
+        "firstAttendance": true,
+        "examEligible": true,
+        "courseCompleted": false
+      },
+      "nextMilestone": "courseCompleted",
+      "progressPercentage": 85
+    },
+    "course": {
+      "id": "507f1f77bcf86cd799439011",
+      "name": "DCA",
+      "type": "Certificate",
+      "duration": "6 months",
+      "fees": 6000
+    },
+    "batch": {
+      "id": "507f1f77bcf86cd799439012",
+      "name": "Morning Batch",
+      "timeSlot": "AM",
+      "teacherName": "Mr. Teacher",
+      "isActive": true
+    },
     "todayClassStatus": {
       "status": "Present",
       "timeSlot": "AM",
-      "marked": true
+      "marked": true,
+      "inTime": "2024-02-15T09:05:00.000Z",
+      "outTime": "2024-02-15T11:00:00.000Z",
+      "method": "QR",
+      "date": "2024-02-15T00:00:00.000Z"
     },
-    "attendancePercentage": 85,
-    "monthlyFeeStatus": {
-      "status": "Paid",
-      "monthlyFee": 1000,
-      "monthlyPaid": 1000,
-      "dueAmount": 0,
-      "nextDueDate": "2024-02-15T00:00:00.000Z"
+    "attendance": {
+      "overall": {
+        "totalDays": 35,
+        "present": 30,
+        "absent": 3,
+        "late": 2,
+        "percentage": 86,
+        "status": "Good"
+      },
+      "monthly": {
+        "currentMonth": "February 2024",
+        "presentDays": 18,
+        "totalDays": 20,
+        "percentage": 90
+      },
+      "courseProgress": {
+        "percentage": 58,
+        "estimatedDaysRemaining": 85,
+        "estimatedCompletionDate": "2024-05-15T00:00:00.000Z"
+      },
+      "examEligibility": {
+        "eligible": true,
+        "threshold": 75,
+        "currentPercentage": 86,
+        "message": "You are eligible for exams"
+      },
+      "recentAttendance": [
+        {
+          "date": "2024-02-15T00:00:00.000Z",
+          "status": "Present",
+          "timeSlot": "9:00 AM - 11:00 AM",
+          "inTime": "2024-02-15T09:05:00.000Z",
+          "outTime": "2024-02-15T11:00:00.000Z",
+          "method": "QR"
+        },
+        {
+          "date": "2024-02-14T00:00:00.000Z",
+          "status": "Present",
+          "timeSlot": "9:00 AM - 11:00 AM",
+          "inTime": "2024-02-14T09:02:00.000Z",
+          "outTime": "2024-02-14T11:00:00.000Z",
+          "method": "QR"
+        }
+      ]
+    },
+    "fees": {
+      "totalFees": 6000,
+      "paidAmount": 3000,
+      "dueAmount": 3000,
+      "progress": 50,
+      "monthlyFees": 1000,
+      "monthlyFeeStatus": {
+        "status": "Paid",
+        "monthlyPaid": 1000,
+        "dueAmount": 0,
+        "nextDueDate": "2024-02-15T00:00:00.000Z"
+      },
+      "recentPayments": [
+        {
+          "_id": "507f1f77bcf86cd799439016",
+          "amount": 1000,
+          "paymentMode": "UPI",
+          "receiptNumber": "DHK001-202401-0001",
+          "month": "January",
+          "year": 2024,
+          "createdAt": "2024-01-20T10:00:00.000Z"
+        }
+      ]
+    },
+    "academic": {
+      "totalExams": 5,
+      "completedExams": 2,
+      "upcomingExams": 2,
+      "examProgress": 40,
+      "overallPercentage": 78,
+      "totalMarks": 390,
+      "totalMaxMarks": 500,
+      "upcomingExamsList": [
+        {
+          "_id": "507f1f77bcf86cd799439018",
+          "examName": "Monthly Test",
+          "examType": "Monthly",
+          "examDate": "2024-01-25T10:00:00.000Z",
+          "maxMarks": 100,
+          "passingMarks": 40,
+          "canAppear": true
+        }
+      ],
+      "recentResults": [
+        {
+          "_id": "507f1f77bcf86cd799439020",
+          "examName": "Mid Term",
+          "examType": "6M",
+          "marksObtained": 75,
+          "maxMarks": 100,
+          "percentage": 75,
+          "status": "PASS"
+        }
+      ]
+    },
+    "certificates": {
+      "totalCertificates": 0,
+      "eligibleCertificates": 1,
+      "eligibilityChecks": [
+        {
+          "courseId": "507f1f77bcf86cd799439011",
+          "courseName": "DCA",
+          "attendancePercentage": 85,
+          "requiredAttendance": 75,
+          "attendanceEligible": true,
+          "allExamsPassed": false,
+          "eligible": false,
+          "message": "Complete all exams to be eligible for certificate"
+        }
+      ]
     },
     "notifications": [
       {
@@ -119,11 +272,97 @@ Complete API documentation for the Student Panel of National Youth Computer Cent
         "message": "Today's class: AM",
         "batchTime": "AM",
         "priority": "LOW"
+      },
+      {
+        "type": "DUE_FEES_WARNING",
+        "message": "You have ₹1000 due. Please pay to avoid service interruption.",
+        "amount": 1000,
+        "priority": "HIGH",
+        "actionRequired": true
       }
-    ]
+    ],
+    "alerts": {
+      "totalAlerts": 3,
+      "urgentAlerts": 0,
+      "highPriorityAlerts": 1,
+      "mediumPriorityAlerts": 1,
+      "lowPriorityAlerts": 1
+    },
+    "quickStats": {
+      "attendancePercentage": 86,
+      "feeProgress": 50,
+      "examProgress": 40,
+      "courseProgress": 58,
+      "daysRemaining": 85,
+      "examsRemaining": 3
+    },
+    "recentNotices": [
+      {
+        "_id": "507f1f77bcf86cd799439022",
+        "title": "Monthly Exam Schedule",
+        "content": "Monthly exam will be conducted on 25th January 2024.",
+        "noticeType": "EXAM",
+        "priority": "HIGH",
+        "createdAt": "2024-01-15T10:00:00.000Z"
+      }
+    ],
+    "idCard": {
+      "hasIdCard": true,
+      "qrCode": "data:image/png;base64,iVBORw0KG...",
+      "idCardUrl": "/uploads/students/id-card.jpg"
+    }
   }
 }
 ```
+
+**Response Fields:**
+- `student` - Basic student information (studentId, name, email, mobile, status, photo)
+- `flow` - Student journey and flow information
+  - `admissionDate` - Date when student was admitted
+  - `officeEntryDate` - Date when student entered the office
+  - `daysSinceAdmission` - Number of days since admission
+  - `currentStage` - Current status of the student (REGISTERED, ACTIVE, COMPLETED, etc.)
+  - `milestones` - Key milestones in student journey (registered, active, courseAssigned, batchAssigned, firstAttendance, examEligible, courseCompleted)
+  - `nextMilestone` - Next milestone to achieve
+  - `progressPercentage` - Overall progress percentage based on milestones
+- `course` - Course details (id, name, type, duration, fees)
+- `batch` - Batch details (id, name, timeSlot, teacherName, isActive)
+- `todayClassStatus` - Today's attendance status with details
+- `attendance` - Comprehensive attendance information
+  - `overall` - Overall attendance statistics (totalDays, present, absent, late, percentage, status)
+  - `monthly` - Current month attendance (currentMonth, presentDays, totalDays, percentage)
+  - `courseProgress` - Course completion progress based on attendance (percentage, estimatedDaysRemaining, estimatedCompletionDate)
+  - `examEligibility` - Exam eligibility status (eligible, threshold, currentPercentage, message)
+  - `recentAttendance` - Last 10 attendance records with details
+- `fees` - Complete fee information
+  - `totalFees` - Total course fees
+  - `paidAmount` - Amount paid so far
+  - `dueAmount` - Amount due
+  - `progress` - Payment progress percentage
+  - `monthlyFees` - Monthly fee amount
+  - `monthlyFeeStatus` - Current month fee status
+  - `recentPayments` - Last 5 payment records
+- `academic` - Academic progress and exam information
+  - `totalExams` - Total number of exams
+  - `completedExams` - Number of exams completed
+  - `upcomingExams` - Number of upcoming exams
+  - `examProgress` - Exam completion progress percentage
+  - `overallPercentage` - Overall exam percentage
+  - `totalMarks` - Total marks obtained
+  - `totalMaxMarks` - Total maximum marks
+  - `upcomingExamsList` - List of upcoming exams with details
+  - `recentResults` - Last 5 exam results
+- `certificates` - Certificate information
+  - `totalCertificates` - Number of certificates issued
+  - `eligibleCertificates` - Number of certificates student is eligible for
+  - `eligibilityChecks` - Detailed eligibility status for each course
+- `notifications` - Important notifications and reminders
+- `alerts` - Alert summary (total, urgent, high, medium, low priority counts)
+- `quickStats` - Quick statistics summary for dashboard widgets
+- `recentNotices` - Recent notices and announcements (last 5)
+- `idCard` - ID card availability and access information
+
+**Note:** This endpoint provides a comprehensive view of all student data in a single request, making it ideal for dashboard implementations. All data is automatically scoped to the authenticated student.
 
 ---
 
@@ -173,10 +412,94 @@ Complete API documentation for the Student Panel of National Youth Computer Cent
       "studentPhoto": "/uploads/students/photo.jpg",
       "idCardUrl": "/uploads/students/id-card.jpg"
     },
-    "status": "ACTIVE"
+    "status": "ACTIVE",
+    "flow": {
+      "admissionDate": "2024-01-15T00:00:00.000Z",
+      "officeEntryDate": "2024-01-15T00:00:00.000Z",
+      "daysSinceAdmission": 45,
+      "currentStage": "ACTIVE",
+      "milestones": {
+        "registered": true,
+        "active": true,
+        "courseAssigned": true,
+        "batchAssigned": true,
+        "firstAttendance": true,
+        "examEligible": true,
+        "courseCompleted": false
+      }
+    },
+    "attendanceProgress": {
+      "overall": {
+        "totalDays": 35,
+        "present": 30,
+        "absent": 3,
+        "late": 2,
+        "percentage": 86,
+        "status": "Good"
+      },
+      "monthly": {
+        "currentMonth": "February 2024",
+        "presentDays": 18
+      },
+      "courseProgress": {
+        "percentage": 58,
+        "estimatedDaysRemaining": 85,
+        "estimatedCompletionDate": "2024-05-15T00:00:00.000Z"
+      },
+      "examEligibility": {
+        "eligible": true,
+        "threshold": 75,
+        "currentPercentage": 86,
+        "message": "You are eligible for exams"
+      },
+      "recentAttendance": [
+        {
+          "date": "2024-02-15T00:00:00.000Z",
+          "status": "Present",
+          "timeSlot": "9:00 AM - 11:00 AM",
+          "inTime": "2024-02-15T09:05:00.000Z",
+          "outTime": "2024-02-15T11:00:00.000Z",
+          "method": "QR"
+        }
+      ]
+    },
+    "payment": {
+      "totalFees": 6000,
+      "paidAmount": 3000,
+      "dueAmount": 3000,
+      "progress": 50
+    },
+    "academic": {
+      "totalExams": 5,
+      "completedExams": 2,
+      "examProgress": 40
+    }
   }
 }
 ```
+
+**Response Fields:**
+- `flow` - Student journey and flow information
+  - `admissionDate` - Date when student was admitted
+  - `officeEntryDate` - Date when student entered the office
+  - `daysSinceAdmission` - Number of days since admission
+  - `currentStage` - Current status of the student
+  - `milestones` - Key milestones in student journey (registered, active, courseAssigned, batchAssigned, firstAttendance, examEligible, courseCompleted)
+- `attendanceProgress` - Detailed attendance-based progress
+  - `overall` - Overall attendance statistics (totalDays, present, absent, late, percentage, status)
+  - `monthly` - Current month attendance (currentMonth, presentDays)
+  - `courseProgress` - Course completion progress based on attendance (percentage, estimatedDaysRemaining, estimatedCompletionDate)
+  - `examEligibility` - Exam eligibility status (eligible, threshold, currentPercentage, message)
+  - `recentAttendance` - Last 10 attendance records with details
+- `payment` - Payment progress information
+  - `totalFees` - Total course fees
+  - `paidAmount` - Amount paid so far
+  - `dueAmount` - Amount due
+  - `progress` - Payment progress percentage
+- `academic` - Academic progress information
+  - `totalExams` - Total number of exams
+  - `completedExams` - Number of exams completed
+  - `examProgress` - Exam completion progress percentage
 
 ### Get ID Card
 **Method:** `GET`  
@@ -200,6 +523,10 @@ Complete API documentation for the Student Panel of National Youth Computer Cent
 
 ---
 
+
+
+
+
 ## Attendance
 
 ### Get Attendance (View Only)
@@ -211,6 +538,8 @@ Complete API documentation for the Student Panel of National Youth Computer Cent
 - `endDate` (optional) - End date (YYYY-MM-DD)
 - `page` (optional) - Page number (default: 1)
 - `limit` (optional) - Items per page (default: 30)
+
+**Description:** Get paginated attendance records with statistics. Uses aggregation pipelines for optimal performance.
 
 **Example:** `/api/student/attendance?startDate=2024-01-01&endDate=2024-01-31&page=1&limit=30`
 
@@ -253,6 +582,119 @@ Complete API documentation for the Student Panel of National Youth Computer Cent
 ```
 
 **Note:** Attendance is read-only. Students cannot edit their attendance records.
+
+### Get My Attendance Details
+**Method:** `GET`  
+**URL:** `/api/student/attendance/details`  
+**Headers:** `Authorization: Bearer <JWT_TOKEN>`
+
+**Description:** Comprehensive attendance details endpoint providing detailed statistics, trends, monthly breakdowns, and analysis. Uses aggregation pipelines for optimal performance.
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "overall": {
+      "totalDays": 100,
+      "present": 85,
+      "absent": 10,
+      "late": 5,
+      "percentage": 85,
+      "status": "Good",
+      "firstAttendance": "2024-01-15T09:00:00.000Z",
+      "lastAttendance": "2024-02-15T11:00:00.000Z"
+    },
+    "monthly": {
+      "currentMonth": "February 2024",
+      "totalDays": 20,
+      "present": 18,
+      "absent": 1,
+      "late": 1,
+      "percentage": 90,
+      "trend": 5,
+      "trendDirection": "up"
+    },
+    "yearly": {
+      "year": 2024,
+      "totalDays": 100,
+      "present": 85,
+      "absent": 10,
+      "late": 5,
+      "percentage": 85
+    },
+    "examEligibility": {
+      "eligible": true,
+      "threshold": 75,
+      "currentPercentage": 85,
+      "message": "You are eligible for exams"
+    },
+    "monthlyBreakdown": [
+      {
+        "month": "February 2024",
+        "totalDays": 20,
+        "present": 18,
+        "absent": 1,
+        "late": 1,
+        "percentage": 90
+      },
+      {
+        "month": "January 2024",
+        "totalDays": 22,
+        "present": 19,
+        "absent": 2,
+        "late": 1,
+        "percentage": 86
+      }
+    ],
+    "statusBreakdown": [
+      {
+        "timeSlot": "AM",
+        "total": 60,
+        "present": 52,
+        "absent": 6,
+        "late": 2,
+        "percentage": 87
+      },
+      {
+        "timeSlot": "PM",
+        "total": 40,
+        "present": 33,
+        "absent": 4,
+        "late": 3,
+        "percentage": 83
+      }
+    ],
+    "recentAttendance": [
+      {
+        "_id": "507f1f77bcf86cd799439013",
+        "date": "2024-02-15T00:00:00.000Z",
+        "status": "Present",
+        "timeSlot": "AM",
+        "inTime": "2024-02-15T09:05:00.000Z",
+        "outTime": "2024-02-15T11:00:00.000Z",
+        "method": "QR",
+        "batch": {
+          "_id": "507f1f77bcf86cd799439012",
+          "name": "Morning Batch",
+          "timeSlot": "AM"
+        }
+      }
+    ]
+  }
+}
+```
+
+**Response Fields:**
+- `overall` - Overall attendance statistics with first and last attendance dates
+- `monthly` - Current month statistics with trend comparison to previous month
+- `yearly` - Year-to-date attendance statistics
+- `examEligibility` - Exam eligibility status and requirements
+- `monthlyBreakdown` - Last 6 months attendance breakdown
+- `statusBreakdown` - Attendance breakdown by time slot (AM/PM)
+- `recentAttendance` - Last 20 attendance records with full details
+
+**Note:** This endpoint provides comprehensive attendance analysis using aggregation pipelines for fast response times.
 
 ---
 
@@ -366,6 +808,8 @@ Complete API documentation for the Student Panel of National Youth Computer Cent
 - `page` (optional) - Page number (default: 1)
 - `limit` (optional) - Items per page (default: 20)
 
+**Description:** Get comprehensive payment history with all student payments, statistics, upcoming payment information, and monthly breakdown. Uses aggregation pipelines for optimal performance.
+
 **Success Response (200):**
 ```json
 {
@@ -375,12 +819,54 @@ Complete API documentation for the Student Panel of National Youth Computer Cent
       {
         "_id": "507f1f77bcf86cd799439016",
         "amount": 1000,
+        "discount": 0,
+        "netAmount": 1000,
         "paymentMode": "UPI",
         "receiptNumber": "DHK001-202401-0001",
         "month": "January",
         "year": 2024,
+        "description": "Monthly fee for January",
         "transactionId": "TXN123456789",
-        "createdAt": "2024-01-20T10:00:00.000Z"
+        "receiptPdfUrl": "",
+        "createdAt": "2024-01-20T10:00:00.000Z",
+        "updatedAt": "2024-01-20T10:00:00.000Z"
+      }
+    ],
+    "statistics": {
+      "totalPayments": 5,
+      "totalPaid": 5000,
+      "averageAmount": 1000,
+      "totalFees": 6000,
+      "paidAmount": 5000,
+      "dueAmount": 1000,
+      "paymentProgress": 83,
+      "firstPayment": "2024-01-15T10:00:00.000Z",
+      "lastPayment": "2024-02-15T10:00:00.000Z"
+    },
+    "upcomingPayment": {
+      "month": "February",
+      "year": 2024,
+      "monthlyFee": 1000,
+      "monthlyPaid": 0,
+      "dueAmount": 1000,
+      "status": "Due",
+      "nextDueDate": "2024-02-15T00:00:00.000Z",
+      "daysUntilDue": 5,
+      "isOverdue": false,
+      "message": "You have ₹1000 due for February 2024"
+    },
+    "monthlyBreakdown": [
+      {
+        "month": "February",
+        "year": 2024,
+        "totalPaid": 0,
+        "paymentCount": 0
+      },
+      {
+        "month": "January",
+        "year": 2024,
+        "totalPaid": 1000,
+        "paymentCount": 1
       }
     ],
     "pagination": {
@@ -392,6 +878,51 @@ Complete API documentation for the Student Panel of National Youth Computer Cent
   }
 }
 ```
+
+**Response Fields:**
+- `payments` - Array of all payment records with full details
+  - `_id` - Payment ID
+  - `amount` - Payment amount
+  - `discount` - Discount applied (if any)
+  - `netAmount` - Net amount after discount
+  - `paymentMode` - Payment mode (UPI, ONLINE, QR, GATEWAY)
+  - `receiptNumber` - Receipt number
+  - `month` - Payment month
+  - `year` - Payment year
+  - `description` - Payment description
+  - `transactionId` - Transaction ID
+  - `receiptPdfUrl` - Receipt PDF URL
+  - `createdAt` - Payment creation date
+  - `updatedAt` - Payment update date
+- `statistics` - Payment statistics
+  - `totalPayments` - Total number of payments made
+  - `totalPaid` - Total amount paid
+  - `averageAmount` - Average payment amount
+  - `totalFees` - Total course fees
+  - `paidAmount` - Total amount paid so far
+  - `dueAmount` - Total amount due
+  - `paymentProgress` - Payment progress percentage
+  - `firstPayment` - Date of first payment
+  - `lastPayment` - Date of last payment
+- `upcomingPayment` - Current month payment information
+  - `month` - Current month name
+  - `year` - Current year
+  - `monthlyFee` - Monthly fee amount
+  - `monthlyPaid` - Amount paid for current month
+  - `dueAmount` - Amount due for current month
+  - `status` - Payment status (Paid/Due)
+  - `nextDueDate` - Next payment due date
+  - `daysUntilDue` - Days until next payment is due (negative if overdue)
+  - `isOverdue` - Whether payment is overdue
+  - `message` - Payment status message
+- `monthlyBreakdown` - Monthly payment breakdown (last 12 months)
+  - `month` - Month name
+  - `year` - Year
+  - `totalPaid` - Total paid for that month
+  - `paymentCount` - Number of payments in that month
+- `pagination` - Pagination information
+
+**Note:** This endpoint provides comprehensive payment information including all payments, statistics, and upcoming payment details using aggregation pipelines for fast response times.
 
 ### Download Receipt
 **Method:** `GET`  

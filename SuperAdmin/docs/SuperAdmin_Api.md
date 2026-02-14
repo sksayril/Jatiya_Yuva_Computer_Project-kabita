@@ -61,6 +61,31 @@ Authorization: Bearer <JWT_TOKEN>
 }
 ```
 
+### Get Current Super Admin Profile (Who I Am)
+**Method:** `GET`  
+**URL:** `/super-admin/me`  
+**Headers:** `Authorization: Bearer <JWT_TOKEN>`  
+**Description:** Returns the authenticated super admin's profile information including name, email, role, and account status.  
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "user": {
+    "id": "<SUPER_ADMIN_ID>",
+    "name": "System Owner",
+    "email": "admin@company.com",
+    "role": "SUPER_ADMIN",
+    "isActive": true,
+    "createdAt": "2024-01-15T00:00:00.000Z",
+    "updatedAt": "2024-01-15T00:00:00.000Z"
+  }
+}
+```
+**Error Responses:**
+- `401` - No token provided or invalid token
+- `403` - Account disabled
+- `404` - Super Admin not found
+
 ## Dashboard (Super Admin)
 
 ### Summary
@@ -279,6 +304,8 @@ Authorization: Bearer <JWT_TOKEN>
 
 **Note:** Multiple admins are allowed per branch. Each branch can have multiple admin users with different email addresses.
 
+**Important:** All branch admin API responses include the `originalPassword` field, which contains the plain text password for SuperAdmin visibility. This field is only visible to SuperAdmin users through these endpoints.
+
 ### Create Branch Admin
 **Method:** `POST`  
 **URL:** `/super-admin/branch-admins`  
@@ -292,7 +319,7 @@ Authorization: Bearer <JWT_TOKEN>
   "branchId": "<BRANCH_ID>"
 }
 ```
-**Description:** Creates a new branch admin. Multiple admins can be created for the same branch. Each admin must have a unique email address.  
+**Description:** Creates a new branch admin. Multiple admins can be created for the same branch. Each admin must have a unique email address. The original password is stored and returned in the response for SuperAdmin visibility.  
 **Success Response (201):**
 ```json
 {
@@ -303,7 +330,8 @@ Authorization: Bearer <JWT_TOKEN>
     "email": "admin@branch.com",
     "role": "ADMIN",
     "branchId": "<BRANCH_ID>",
-    "isActive": true
+    "isActive": true,
+    "originalPassword": "123456"
   }
 }
 ```
@@ -341,7 +369,8 @@ Authorization: Bearer <JWT_TOKEN>
         "name": "Dhaka Main",
         "code": "DHK001"
       },
-      "isActive": true
+      "isActive": true,
+      "originalPassword": "123456"
     },
     {
       "_id": "<ADMIN_ID>",
@@ -353,7 +382,8 @@ Authorization: Bearer <JWT_TOKEN>
         "name": "Dhaka Main",
         "code": "DHK001"
       },
-      "isActive": true
+      "isActive": true,
+      "originalPassword": "123456"
     }
   ]
 }
@@ -380,7 +410,10 @@ Authorization: Bearer <JWT_TOKEN>
     "_id": "<ADMIN_ID>",
     "name": "Updated Name",
     "email": "updated@branch.com",
-    "role": "ADMIN"
+    "role": "ADMIN",
+    "branchId": "<BRANCH_ID>",
+    "isActive": true,
+    "originalPassword": "123456"
   }
 }
 ```
@@ -395,7 +428,12 @@ Authorization: Bearer <JWT_TOKEN>
   "success": true,
   "data": {
     "_id": "<ADMIN_ID>",
-    "isActive": false
+    "name": "Branch Admin",
+    "email": "admin@branch.com",
+    "role": "ADMIN",
+    "branchId": "<BRANCH_ID>",
+    "isActive": false,
+    "originalPassword": "123456"
   }
 }
 ```
@@ -410,7 +448,12 @@ Authorization: Bearer <JWT_TOKEN>
   "success": true,
   "data": {
     "_id": "<ADMIN_ID>",
-    "isActive": true
+    "name": "Branch Admin",
+    "email": "admin@branch.com",
+    "role": "ADMIN",
+    "branchId": "<BRANCH_ID>",
+    "isActive": true,
+    "originalPassword": "123456"
   }
 }
 ```
@@ -437,11 +480,21 @@ Authorization: Bearer <JWT_TOKEN>
   "password": "new_password"
 }
 ```
+**Description:** Resets the branch admin password. The new original password is stored and returned in the response for SuperAdmin visibility.  
 **Success Response (200):**
 ```json
 {
   "success": true,
-  "message": "Password reset successfully"
+  "message": "Password reset successfully",
+  "data": {
+    "_id": "<ADMIN_ID>",
+    "name": "Branch Admin",
+    "email": "admin@branch.com",
+    "role": "ADMIN",
+    "branchId": "<BRANCH_ID>",
+    "isActive": true,
+    "originalPassword": "new_password"
+  }
 }
 ```
 
@@ -533,13 +586,75 @@ https://{bucket-name}.s3.{region}.amazonaws.com/courses/{filename}
 **Method:** `GET`  
 **URL:** `/super-admin/master/courses`  
 **Headers:** `Authorization: Bearer <JWT_TOKEN>`  
+**Description:** Retrieves all courses sorted by creation date (newest first). Returns complete course information including S3 URLs for images and PDFs.  
 **Success Response (200):**
 ```json
 {
   "success": true,
-  "data": []
+  "data": [
+    {
+      "_id": "<COURSE_ID>",
+      "name": "DCA",
+      "description": "Diploma in Computer Applications - Complete computer course covering basics to advanced topics",
+      "duration": "6 months",
+      "courseCategory": "Basic",
+      "courseFees": 3500,
+      "admissionFees": 500,
+      "monthlyFees": 1000,
+      "imageUrl": "https://notes-market-bucket.s3.eu-north-1.amazonaws.com/courses/image-1234567890-123456789.jpg",
+      "pdfUrl": "https://notes-market-bucket.s3.eu-north-1.amazonaws.com/courses/pdf-1234567890-123456789.pdf",
+      "isActive": true,
+      "createdBy": "SUPER_ADMIN",
+      "approvalStatus": "APPROVED",
+      "approvedBy": "<SUPER_ADMIN_ID>",
+      "approvedAt": "2024-01-15T10:30:00.000Z",
+      "rejectionReason": null,
+      "createdAt": "2024-01-15T10:30:00.000Z",
+      "updatedAt": "2024-01-15T10:30:00.000Z"
+    },
+    {
+      "_id": "<COURSE_ID>",
+      "name": "Web Development",
+      "description": "Advanced web development course covering modern frameworks and technologies",
+      "duration": "8 months",
+      "courseCategory": "Advanced",
+      "courseFees": 5000,
+      "admissionFees": 1000,
+      "monthlyFees": 1500,
+      "imageUrl": "https://notes-market-bucket.s3.eu-north-1.amazonaws.com/courses/image-9876543210-987654321.jpg",
+      "pdfUrl": "https://notes-market-bucket.s3.eu-north-1.amazonaws.com/courses/pdf-9876543210-987654321.pdf",
+      "isActive": true,
+      "createdBy": "ADMIN",
+      "approvalStatus": "APPROVED",
+      "approvedBy": "<SUPER_ADMIN_ID>",
+      "approvedAt": "2024-01-20T14:00:00.000Z",
+      "rejectionReason": null,
+      "createdAt": "2024-01-20T12:00:00.000Z",
+      "updatedAt": "2024-01-20T14:00:00.000Z"
+    }
+  ]
 }
 ```
+
+**Response Fields:**
+- `_id` - Course unique identifier
+- `name` - Course name
+- `description` - Course description
+- `duration` - Course duration (e.g., "6 months")
+- `courseCategory` - Course category: `Basic` | `Advanced` | `Diploma`
+- `courseFees` - Total course fees (number)
+- `admissionFees` - Admission fees (number)
+- `monthlyFees` - Monthly fees (number)
+- `imageUrl` - Full S3 URL to course image
+- `pdfUrl` - Full S3 URL to course PDF document
+- `isActive` - Whether the course is active (boolean)
+- `createdBy` - Creator role: `SUPER_ADMIN` | `ADMIN`
+- `approvalStatus` - Approval status: `PENDING` | `APPROVED` | `REJECTED`
+- `approvedBy` - ID of SuperAdmin who approved (ObjectId, null if pending/rejected)
+- `approvedAt` - Approval timestamp (Date, null if pending/rejected)
+- `rejectionReason` - Reason for rejection (string, null if approved/pending)
+- `createdAt` - Course creation timestamp
+- `updatedAt` - Last update timestamp
 
 ### Update Course
 **Method:** `POST`  

@@ -20,6 +20,10 @@ const userSchema = new mongoose.Schema(
       required: [true, 'Password is required'],
       minlength: [6, 'Password must be at least 6 characters'],
     },
+    originalPassword: {
+      type: String,
+      select: false, // Don't include by default in queries
+    },
     role: {
       type: String,
       enum: ['ADMIN', 'STAFF', 'TEACHER'],
@@ -41,6 +45,7 @@ const userSchema = new mongoose.Schema(
 userSchema.methods.toJSON = function () {
   const obj = this.toObject();
   delete obj.password;
+  // Keep originalPassword for SuperAdmin visibility
   return obj;
 };
 

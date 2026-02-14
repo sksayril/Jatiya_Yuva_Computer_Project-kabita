@@ -61,6 +61,10 @@ const teacherSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    imageUrl: {
+      type: String,
+      trim: true,
+    },
     isActive: {
       type: Boolean,
       default: true,
@@ -74,6 +78,10 @@ const teacherSchema = new mongoose.Schema(
       password: {
         type: String,
       },
+    },
+    originalPassword: {
+      type: String,
+      select: false, // Don't include by default in queries
     },
   },
   { timestamps: true }

@@ -14,12 +14,12 @@ const mongoose = require('mongoose');
 const markStudentAttendance = async (req, res) => {
   try {
     const branchId = req.branchId;
-    const { studentId, batchId, date, timeSlot, method, qrData } = req.body;
+    const { studentId, date, timeSlot, method, qrData, inTime, outTime } = req.body;
 
-    if (!studentId || !batchId || !date) {
+    if (!studentId || !date) {
       return res.status(400).json({
         success: false,
-        message: 'Missing required fields: studentId, batchId, date',
+        message: 'Missing required fields: studentId, date',
       });
     }
 
@@ -29,18 +29,19 @@ const markStudentAttendance = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Student not found' });
     }
 
-    // Verify batch belongs to branch
-    const batch = await Batch.findOne({ _id: batchId, branchId });
-    if (!batch) {
-      return res.status(404).json({ success: false, message: 'Batch not found' });
-    }
-
-    // Verify student is in this batch
-    if (student.batchId.toString() !== batchId) {
+    // Get batchId from student record
+    const batchId = student.batchId;
+    if (!batchId) {
       return res.status(400).json({
         success: false,
-        message: 'Student is not enrolled in this batch',
+        message: 'Student is not assigned to any batch',
       });
+    }
+
+    // Get batch for timeSlot and other batch info
+    const batch = await Batch.findOne({ _id: batchId, branchId });
+    if (!batch) {
+      return res.status(404).json({ success: false, message: 'Student batch not found' });
     }
 
     // Check if student is active
@@ -115,6 +116,8 @@ const markStudentAttendance = async (req, res) => {
       batchId,
       date: attendanceDate,
       timeSlot: timeSlot || batch.timeSlot,
+      inTime: inTime ? new Date(inTime) : new Date(),
+      outTime: outTime ? new Date(outTime) : null,
       status,
       method: method || 'MANUAL',
       markedBy: req.user.id,
@@ -154,7 +157,7 @@ const markStudentAttendance = async (req, res) => {
 const markStaffAttendance = async (req, res) => {
   try {
     const branchId = req.branchId;
-    const { staffId, date, method, qrData } = req.body;
+    const { staffId, date, method, qrData, checkIn, checkOut } = req.body;
 
     if (!staffId || !date) {
       return res.status(400).json({
@@ -230,7 +233,8 @@ const markStaffAttendance = async (req, res) => {
       branchId,
       staffId: staff._id,
       date: attendanceDate,
-      checkIn: new Date(),
+      checkIn: checkIn ? new Date(checkIn) : new Date(),
+      checkOut: checkOut ? new Date(checkOut) : null,
       status: 'Present',
       method: method || 'MANUAL',
       markedBy: req.user.id,
@@ -277,13 +281,43 @@ const markStaffAttendance = async (req, res) => {
 const getStudentAttendance = async (req, res) => {
   try {
     const branchId = req.branchId;
-    const { studentId, batchId, startDate, endDate } = req.query;
+    const { studentId, batchId, date, startDate, endDate } = req.query;
 
     const query = { branchId };
-    if (studentId) query.studentId = studentId;
+    
+    // Handle studentId - could be ObjectId or string studentId
+    if (studentId) {
+      if (mongoose.Types.ObjectId.isValid(studentId) && studentId.length === 24) {
+        // It's a valid ObjectId, use directly
+        query.studentId = studentId;
+      } else {
+        // It's a string studentId (e.g., "YUVA-0002-2026-001"), find the student first
+        const student = await Student.findOne({ 
+          studentId: studentId.toUpperCase().trim(), 
+          branchId 
+        });
+        if (!student) {
+          return res.status(404).json({
+            success: false,
+            message: 'Student not found',
+          });
+        }
+        query.studentId = student._id;
+      }
+    }
+    
     if (batchId) query.batchId = batchId;
 
-    if (startDate || endDate) {
+    // Handle date filtering
+    if (date) {
+      // Single date filter
+      const attendanceDate = new Date(date);
+      attendanceDate.setHours(0, 0, 0, 0);
+      const attendanceDateEnd = new Date(attendanceDate);
+      attendanceDateEnd.setHours(23, 59, 59, 999);
+      query.date = { $gte: attendanceDate, $lte: attendanceDateEnd };
+    } else if (startDate || endDate) {
+      // Date range filter
       query.date = {};
       if (startDate) {
         query.date.$gte = new Date(startDate);
@@ -319,12 +353,41 @@ const getStudentAttendance = async (req, res) => {
 const getStaffAttendance = async (req, res) => {
   try {
     const branchId = req.branchId;
-    const { staffId, startDate, endDate } = req.query;
+    const { staffId, date, startDate, endDate } = req.query;
 
     const query = { branchId };
-    if (staffId) query.staffId = staffId;
+    
+    // Handle staffId - could be ObjectId or string staffId
+    if (staffId) {
+      if (mongoose.Types.ObjectId.isValid(staffId) && staffId.length === 24) {
+        // It's a valid ObjectId, use directly
+        query.staffId = staffId;
+      } else {
+        // It's a string staffId (e.g., "DHK001-STF-001"), find the staff first
+        const staff = await Staff.findOne({ 
+          staffId: staffId.toUpperCase().trim(), 
+          branchId 
+        });
+        if (!staff) {
+          return res.status(404).json({
+            success: false,
+            message: 'Staff not found',
+          });
+        }
+        query.staffId = staff._id;
+      }
+    }
 
-    if (startDate || endDate) {
+    // Handle date filtering
+    if (date) {
+      // Single date filter
+      const attendanceDate = new Date(date);
+      attendanceDate.setHours(0, 0, 0, 0);
+      const attendanceDateEnd = new Date(attendanceDate);
+      attendanceDateEnd.setHours(23, 59, 59, 999);
+      query.date = { $gte: attendanceDate, $lte: attendanceDateEnd };
+    } else if (startDate || endDate) {
+      // Date range filter
       query.date = {};
       if (startDate) {
         query.date.$gte = new Date(startDate);
@@ -403,7 +466,7 @@ const updateStudentAttendance = async (req, res) => {
   try {
     const branchId = req.branchId;
     const { id } = req.params;
-    const { status, timeSlot, method } = req.body;
+    const { status, timeSlot, method, inTime, outTime, date } = req.body;
 
     // Validate ID format
     if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -443,12 +506,22 @@ const updateStudentAttendance = async (req, res) => {
       status: attendance.status,
       timeSlot: attendance.timeSlot,
       method: attendance.method,
+      inTime: attendance.inTime,
+      outTime: attendance.outTime,
+      date: attendance.date,
     };
 
     // Update fields
     if (status) attendance.status = status;
     if (timeSlot) attendance.timeSlot = timeSlot;
     if (method) attendance.method = method;
+    if (inTime) attendance.inTime = new Date(inTime);
+    if (outTime) attendance.outTime = new Date(outTime);
+    if (date) {
+      const newDate = new Date(date);
+      newDate.setHours(0, 0, 0, 0);
+      attendance.date = newDate;
+    }
 
     const updatedAttendance = await attendance.save();
 
@@ -465,6 +538,9 @@ const updateStudentAttendance = async (req, res) => {
         status: updatedAttendance.status,
         timeSlot: updatedAttendance.timeSlot,
         method: updatedAttendance.method,
+        inTime: updatedAttendance.inTime,
+        outTime: updatedAttendance.outTime,
+        date: updatedAttendance.date,
       },
       ip: req.ip,
       userAgent: req.get('user-agent'),
@@ -605,7 +681,7 @@ const updateStaffAttendance = async (req, res) => {
   try {
     const branchId = req.branchId;
     const { id } = req.params;
-    const { status, method, checkIn, checkOut } = req.body;
+    const { status, method, checkIn, checkOut, date } = req.body;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({
@@ -636,6 +712,11 @@ const updateStaffAttendance = async (req, res) => {
     if (method) attendance.method = method;
     if (checkIn) attendance.checkIn = new Date(checkIn);
     if (checkOut) attendance.checkOut = new Date(checkOut);
+    if (date) {
+      const newDate = new Date(date);
+      newDate.setHours(0, 0, 0, 0);
+      attendance.date = newDate;
+    }
 
     const updatedAttendance = await attendance.save();
 
@@ -653,6 +734,7 @@ const updateStaffAttendance = async (req, res) => {
         method: updatedAttendance.method,
         checkIn: updatedAttendance.checkIn,
         checkOut: updatedAttendance.checkOut,
+        date: updatedAttendance.date,
       },
       ip: req.ip,
       userAgent: req.get('user-agent'),
@@ -729,9 +811,429 @@ const deleteStaffAttendance = async (req, res) => {
   }
 };
 
+/**
+ * Mark Student In-Time
+ * POST /api/admin/attendance/student/in-time
+ */
+const markStudentInTime = async (req, res) => {
+  try {
+    const branchId = req.branchId;
+    const { studentId, date, timeSlot, method, qrData, inTime } = req.body;
+
+    if (!studentId || !date) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required fields: studentId, date',
+      });
+    }
+
+    // Verify student belongs to branch
+    const student = await Student.findOne({ studentId, branchId });
+    if (!student) {
+      return res.status(404).json({ success: false, message: 'Student not found' });
+    }
+
+    // Get batchId from student record
+    const batchId = student.batchId;
+    if (!batchId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Student is not assigned to any batch',
+      });
+    }
+
+    // Get batch for timeSlot
+    const batch = await Batch.findOne({ _id: batchId, branchId });
+    if (!batch) {
+      return res.status(404).json({ success: false, message: 'Student batch not found' });
+    }
+
+    // Check if student is active
+    if (student.status !== 'ACTIVE') {
+      return res.status(400).json({
+        success: false,
+        message: 'Student is not active',
+      });
+    }
+
+    // Verify QR code if method is QR
+    if (method === 'QR' && qrData) {
+      try {
+        const qrInfo = JSON.parse(qrData);
+        if (qrInfo.studentId !== student.studentId || qrInfo.branchId !== branchId) {
+          return res.status(400).json({
+            success: false,
+            message: 'Invalid QR code',
+          });
+        }
+      } catch (error) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid QR code format',
+        });
+      }
+    }
+
+    // Check for existing attendance on same date
+    const attendanceDate = new Date(date);
+    attendanceDate.setHours(0, 0, 0, 0);
+    const attendanceDateEnd = new Date(attendanceDate);
+    attendanceDateEnd.setHours(23, 59, 59, 999);
+
+    let attendance = await StudentAttendance.findOne({
+      branchId,
+      studentId: student._id,
+      date: { $gte: attendanceDate, $lte: attendanceDateEnd },
+    });
+
+    if (attendance) {
+      // Update in-time if attendance exists
+      attendance.inTime = inTime ? new Date(inTime) : new Date();
+      attendance.timeSlot = timeSlot || batch.timeSlot;
+      attendance.method = method || attendance.method || 'MANUAL';
+      await attendance.save();
+    } else {
+      // Create new attendance record with in-time only
+      attendance = await StudentAttendance.create({
+        branchId,
+        studentId: student._id,
+        batchId,
+        date: attendanceDate,
+        timeSlot: timeSlot || batch.timeSlot,
+        inTime: inTime ? new Date(inTime) : new Date(),
+        outTime: null,
+        status: 'Present',
+        method: method || 'MANUAL',
+        markedBy: req.user.id,
+      });
+    }
+
+    await logAudit({
+      branchId,
+      userId: req.user.id,
+      role: req.user.role,
+      action: 'CREATE',
+      module: 'STUDENT_ATTENDANCE',
+      entityId: attendance._id,
+      newData: { studentId: student.studentId, inTime: attendance.inTime, method },
+      ip: req.ip,
+      userAgent: req.get('user-agent'),
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Student in-time marked successfully',
+      data: attendance,
+    });
+  } catch (error) {
+    console.error('Mark student in-time error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while marking in-time',
+      error: config.isDevelopment() ? error.message : undefined,
+    });
+  }
+};
+
+/**
+ * Mark Student Out-Time
+ * POST /api/admin/attendance/student/out-time
+ */
+const markStudentOutTime = async (req, res) => {
+  try {
+    const branchId = req.branchId;
+    const { studentId, date, outTime, method, qrData } = req.body;
+
+    if (!studentId || !date) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required fields: studentId, date',
+      });
+    }
+
+    // Verify student belongs to branch
+    const student = await Student.findOne({ studentId, branchId });
+    if (!student) {
+      return res.status(404).json({ success: false, message: 'Student not found' });
+    }
+
+    // Verify QR code if method is QR
+    if (method === 'QR' && qrData) {
+      try {
+        const qrInfo = JSON.parse(qrData);
+        if (qrInfo.studentId !== student.studentId || qrInfo.branchId !== branchId) {
+          return res.status(400).json({
+            success: false,
+            message: 'Invalid QR code',
+          });
+        }
+      } catch (error) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid QR code format',
+        });
+      }
+    }
+
+    // Find existing attendance for the date
+    const attendanceDate = new Date(date);
+    attendanceDate.setHours(0, 0, 0, 0);
+    const attendanceDateEnd = new Date(attendanceDate);
+    attendanceDateEnd.setHours(23, 59, 59, 999);
+
+    const attendance = await StudentAttendance.findOne({
+      branchId,
+      studentId: student._id,
+      date: { $gte: attendanceDate, $lte: attendanceDateEnd },
+    });
+
+    if (!attendance) {
+      return res.status(400).json({
+        success: false,
+        message: 'In-time not marked for this date. Please mark in-time first.',
+      });
+    }
+
+    // Update out-time
+    attendance.outTime = outTime ? new Date(outTime) : new Date();
+    if (method) attendance.method = method;
+    await attendance.save();
+
+    await logAudit({
+      branchId,
+      userId: req.user.id,
+      role: req.user.role,
+      action: 'UPDATE',
+      module: 'STUDENT_ATTENDANCE',
+      entityId: attendance._id,
+      oldData: { outTime: null },
+      newData: { studentId: student.studentId, outTime: attendance.outTime },
+      ip: req.ip,
+      userAgent: req.get('user-agent'),
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Student out-time marked successfully',
+      data: attendance,
+    });
+  } catch (error) {
+    console.error('Mark student out-time error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while marking out-time',
+      error: config.isDevelopment() ? error.message : undefined,
+    });
+  }
+};
+
+/**
+ * Mark Staff Check-In
+ * POST /api/admin/attendance/staff/check-in
+ */
+const markStaffCheckIn = async (req, res) => {
+  try {
+    const branchId = req.branchId;
+    const { staffId, date, timeSlot, method, qrData, checkIn } = req.body;
+
+    if (!staffId || !date) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required fields: staffId, date',
+      });
+    }
+
+    // Verify staff belongs to branch
+    const staff = await Staff.findOne({ staffId, branchId });
+    if (!staff) {
+      return res.status(404).json({ success: false, message: 'Staff not found' });
+    }
+
+    // Check if staff is active
+    if (!staff.isActive) {
+      return res.status(400).json({
+        success: false,
+        message: 'Staff is not active',
+      });
+    }
+
+    // Verify QR code if method is QR
+    if (method === 'QR' && qrData) {
+      try {
+        const qrInfo = JSON.parse(qrData);
+        if (qrInfo.staffId !== staff.staffId || qrInfo.branchId !== branchId) {
+          return res.status(400).json({
+            success: false,
+            message: 'Invalid QR code',
+          });
+        }
+      } catch (error) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid QR code format',
+        });
+      }
+    }
+
+    // Check for existing attendance on same date
+    const attendanceDate = new Date(date);
+    attendanceDate.setHours(0, 0, 0, 0);
+    const attendanceDateEnd = new Date(attendanceDate);
+    attendanceDateEnd.setHours(23, 59, 59, 999);
+
+    let attendance = await StaffAttendance.findOne({
+      branchId,
+      staffId: staff._id,
+      date: { $gte: attendanceDate, $lte: attendanceDateEnd },
+    });
+
+    if (attendance) {
+      // Update check-in if attendance exists
+      attendance.checkIn = checkIn ? new Date(checkIn) : new Date();
+      if (timeSlot) attendance.timeSlot = timeSlot;
+      attendance.method = method || attendance.method || 'MANUAL';
+      await attendance.save();
+    } else {
+      // Create new attendance record with check-in only
+      attendance = await StaffAttendance.create({
+        branchId,
+        staffId: staff._id,
+        date: attendanceDate,
+        timeSlot: timeSlot || null,
+        checkIn: checkIn ? new Date(checkIn) : new Date(),
+        checkOut: null,
+        status: 'Present',
+        method: method || 'MANUAL',
+        markedBy: req.user.id,
+      });
+    }
+
+    await logAudit({
+      branchId,
+      userId: req.user.id,
+      role: req.user.role,
+      action: 'CREATE',
+      module: 'STAFF_ATTENDANCE',
+      entityId: attendance._id,
+      newData: { staffId: staff.staffId, checkIn: attendance.checkIn, method },
+      ip: req.ip,
+      userAgent: req.get('user-agent'),
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Staff check-in marked successfully',
+      data: attendance,
+    });
+  } catch (error) {
+    console.error('Mark staff check-in error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while marking check-in',
+      error: config.isDevelopment() ? error.message : undefined,
+    });
+  }
+};
+
+/**
+ * Mark Staff Check-Out
+ * POST /api/admin/attendance/staff/check-out
+ */
+const markStaffCheckOut = async (req, res) => {
+  try {
+    const branchId = req.branchId;
+    const { staffId, date, checkOut, method, qrData } = req.body;
+
+    if (!staffId || !date) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required fields: staffId, date',
+      });
+    }
+
+    // Verify staff belongs to branch
+    const staff = await Staff.findOne({ staffId, branchId });
+    if (!staff) {
+      return res.status(404).json({ success: false, message: 'Staff not found' });
+    }
+
+    // Verify QR code if method is QR
+    if (method === 'QR' && qrData) {
+      try {
+        const qrInfo = JSON.parse(qrData);
+        if (qrInfo.staffId !== staff.staffId || qrInfo.branchId !== branchId) {
+          return res.status(400).json({
+            success: false,
+            message: 'Invalid QR code',
+          });
+        }
+      } catch (error) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid QR code format',
+        });
+      }
+    }
+
+    // Find existing attendance for the date
+    const attendanceDate = new Date(date);
+    attendanceDate.setHours(0, 0, 0, 0);
+    const attendanceDateEnd = new Date(attendanceDate);
+    attendanceDateEnd.setHours(23, 59, 59, 999);
+
+    const attendance = await StaffAttendance.findOne({
+      branchId,
+      staffId: staff._id,
+      date: { $gte: attendanceDate, $lte: attendanceDateEnd },
+    });
+
+    if (!attendance) {
+      return res.status(400).json({
+        success: false,
+        message: 'Check-in not marked for this date. Please mark check-in first.',
+      });
+    }
+
+    // Update check-out
+    attendance.checkOut = checkOut ? new Date(checkOut) : new Date();
+    if (method) attendance.method = method;
+    await attendance.save();
+
+    await logAudit({
+      branchId,
+      userId: req.user.id,
+      role: req.user.role,
+      action: 'UPDATE',
+      module: 'STAFF_ATTENDANCE',
+      entityId: attendance._id,
+      oldData: { checkOut: null },
+      newData: { staffId: staff.staffId, checkOut: attendance.checkOut },
+      ip: req.ip,
+      userAgent: req.get('user-agent'),
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Staff check-out marked successfully',
+      data: attendance,
+    });
+  } catch (error) {
+    console.error('Mark staff check-out error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while marking check-out',
+      error: config.isDevelopment() ? error.message : undefined,
+    });
+  }
+};
+
 module.exports = {
   markStudentAttendance,
+  markStudentInTime,
+  markStudentOutTime,
   markStaffAttendance,
+  markStaffCheckIn,
+  markStaffCheckOut,
   getStudentAttendance,
   getStaffAttendance,
   getStudentAttendanceById,
