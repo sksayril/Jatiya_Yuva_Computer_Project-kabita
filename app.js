@@ -20,6 +20,7 @@ const teacherRouter = require('./Teacher/app');
 
 // Public routes (no authentication required)
 const certificatePublicRoutes = require('./SuperAdmin/routes/certificatePublic.routes');
+const coursePublicRoutes = require('./SuperAdmin/routes/coursePublic.routes');
 
 // Create Express app
 const app = express();
@@ -58,6 +59,7 @@ app.use('/uploads', express.static(path.join(__dirname, 'Teacher', 'uploads')));
 
 // Public Routes (no authentication)
 app.use('/api/certificates', certificatePublicRoutes);
+app.use('/api/public/courses', coursePublicRoutes);
 
 // Super Admin Routes
 app.use('/api/super-admin', superAdminRouter);
@@ -155,6 +157,8 @@ const startServer = async () => {
       console.log(`   - Staff Panel API: /api/staff/*`);
       console.log(`   - Student Panel API: /api/student/*`);
       console.log(`   - Teacher Panel API: /api/teacher/*`);
+      console.log(`   - Public Courses API: /api/public/courses/*`);
+      console.log(`   - Public Certificates API: /api/certificates/*`);
       console.log(`   - Health Check: /api/health`);
       console.log('='.repeat(60) + '\n');
     });

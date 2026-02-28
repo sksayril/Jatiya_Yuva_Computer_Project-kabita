@@ -328,8 +328,15 @@ const createTeacher = async (req, res) => {
       }
     }
 
-    // Generate Teacher ID
-    const teacherId = await generateTeacherId(branch.code, Teacher);
+    // Generate Teacher ID with retry logic for duplicate handling
+    let teacherId = await generateTeacherId(branch.code, Teacher);
+    
+    // Verify teacherId doesn't already exist (double-check)
+    const existingTeacherId = await Teacher.findOne({ teacherId });
+    if (existingTeacherId) {
+      // If exists, generate a new one
+      teacherId = await generateTeacherId(branch.code, Teacher);
+    }
 
     // Use provided password (required)
     const loginEmail = email.toLowerCase().trim();
@@ -357,25 +364,53 @@ const createTeacher = async (req, res) => {
     
     // Create teacher in Teacher model (without QR code)
     // branchId is automatically set from authenticated admin's branch
-    const teacher = await Teacher.create({
-      branchId: teacherBranchId, // Always use authenticated admin's branchId
-      teacherId,
-      name: name.trim(),
-      email: loginEmail,
-      mobile: mobile.trim(),
-      assignedBatches: assignedBatches && Array.isArray(assignedBatches) ? assignedBatches : [],
-      salaryType,
-      salaryRate: Number(salaryRate),
-      currentMonthClasses: 0,
-      currentMonthSalary: 0,
-      imageUrl: imageUrl || '',
-      isActive: true,
-      originalPassword: teacherPassword, // Store original password for Admin visibility
-      loginCredentials: {
-        email: loginEmail,
-        password: teacherPassword,
-      },
-    });
+    // Use try-catch with retry for duplicate key errors
+    let teacher;
+    let retries = 0;
+    const maxRetries = 3;
+    
+    while (retries < maxRetries) {
+      try {
+        teacher = await Teacher.create({
+          branchId: teacherBranchId, // Always use authenticated admin's branchId
+          teacherId,
+          name: name.trim(),
+          email: loginEmail,
+          mobile: mobile.trim(),
+          assignedBatches: assignedBatches && Array.isArray(assignedBatches) ? assignedBatches : [],
+          salaryType,
+          salaryRate: Number(salaryRate),
+          currentMonthClasses: 0,
+          currentMonthSalary: 0,
+          imageUrl: imageUrl || '',
+          isActive: true,
+          originalPassword: teacherPassword, // Store original password for Admin visibility
+          loginCredentials: {
+            email: loginEmail,
+            password: teacherPassword,
+          },
+        });
+        break; // Success, exit retry loop
+      } catch (createError) {
+        // Check if it's a duplicate key error for teacherId
+        if (createError.code === 11000 && createError.keyPattern && createError.keyPattern.teacherId) {
+          retries++;
+          if (retries >= maxRetries) {
+            // Max retries reached, return error
+            return res.status(409).json({
+              success: false,
+              message: `Teacher ID "${teacherId}" already exists. Please try again.`,
+              error: config.isDevelopment() ? createError.message : undefined,
+            });
+          }
+          // Generate a new teacherId and retry
+          teacherId = await generateTeacherId(branch.code, Teacher);
+          continue;
+        }
+        // If it's a different error (e.g., duplicate email), throw it
+        throw createError;
+      }
+    }
 
     // Update batches with teacher assignment (if batches are provided)
     if (assignedBatches && assignedBatches.length > 0) {
@@ -421,6 +456,25 @@ const createTeacher = async (req, res) => {
     });
   } catch (error) {
     console.error('Create teacher error:', error);
+    
+    // Handle duplicate key errors specifically
+    if (error.code === 11000) {
+      if (error.keyPattern && error.keyPattern.teacherId) {
+        return res.status(409).json({
+          success: false,
+          message: `Teacher ID "${error.keyValue?.teacherId || 'unknown'}" already exists. Please try again.`,
+          error: config.isDevelopment() ? error.message : undefined,
+        });
+      }
+      if (error.keyPattern && error.keyPattern.email) {
+        return res.status(409).json({
+          success: false,
+          message: 'Email already registered in this branch',
+          error: config.isDevelopment() ? error.message : undefined,
+        });
+      }
+    }
+    
     res.status(500).json({
       success: false,
       message: 'Server error while creating teacher',

@@ -28,7 +28,7 @@ if (config.AWS_ACCESS_KEY_ID && config.AWS_SECRET_ACCESS_KEY) {
         if (file.fieldname === 'image' || file.fieldname === 'thumbnail') folder = 'images';
         else if (file.fieldname === 'pdf') folder = 'pdfs';
         else if (file.fieldname === 'video') folder = 'videos';
-        else if (['studentPhoto', 'studentSignature', 'officeSignature', 'formScanImage'].includes(file.fieldname)) {
+        else if (['studentPhoto', 'studentSignature', 'officeSignature', 'formScanImage', 'aadharCardImage', 'schoolCertificateImage'].includes(file.fieldname)) {
           folder = `students/${file.fieldname}`;
         }
         else if (file.fieldname === 'teacherImage') {
@@ -54,7 +54,7 @@ if (!storage) {
     destination: (req, file, cb) => {
       let uploadPath = path.join(__dirname, '../uploads');
       // Create subfolder for student files
-      if (['studentPhoto', 'studentSignature', 'officeSignature', 'formScanImage'].includes(file.fieldname)) {
+      if (['studentPhoto', 'studentSignature', 'officeSignature', 'formScanImage', 'aadharCardImage', 'schoolCertificateImage'].includes(file.fieldname)) {
         uploadPath = path.join(uploadPath, 'students', file.fieldname);
       }
       // Create subfolder for teacher files
@@ -135,6 +135,8 @@ const uploadStudentFiles = multer({
   { name: 'studentSignature', maxCount: 1 },
   { name: 'officeSignature', maxCount: 1 },
   { name: 'formScanImage', maxCount: 1 },
+  { name: 'aadharCardImage', maxCount: 1 },
+  { name: 'schoolCertificateImage', maxCount: 1 },
 ]);
 
 // Teacher image upload

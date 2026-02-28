@@ -147,6 +147,14 @@ const studentSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    aadharCardImage: {
+      type: String,
+      trim: true,
+    },
+    schoolCertificateImage: {
+      type: String,
+      trim: true,
+    },
     status: {
       type: String,
       enum: ['PENDING', 'ACTIVE', 'INACTIVE', 'DROPPED'],

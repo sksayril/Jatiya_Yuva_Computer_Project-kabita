@@ -457,6 +457,8 @@ Authorization: Bearer <JWT_TOKEN>
 - `studentSignature` (file) - Student signature (jpg/png/webp/pdf) - **Uploaded to AWS S3**
 - `officeSignature` (file) - Office signature (jpg/png/webp/pdf) - **Uploaded to AWS S3**
 - `formScanImage` (file) - Scanned form image (jpg/png/webp/pdf) - **Uploaded to AWS S3**
+- `aadharCardImage` (file) - Aadhar card image (jpg/png/webp/pdf) - **Uploaded to AWS S3**
+- `schoolCertificateImage` (file) - School certificate image (jpg/png/webp/pdf) - **Uploaded to AWS S3**
 
 **Example (multipart/form-data):**
 ```
@@ -474,13 +476,15 @@ studentPhoto: <file>
 studentSignature: <file>
 officeSignature: <file>
 formScanImage: <file>
+aadharCardImage: <file>
+schoolCertificateImage: <file>
 ```
 
 **Note:** When using form-data, nested objects (like `admission`, `student`, etc.) must be sent as JSON strings. The API will parse them automatically.
 
 **File Storage:**
 - All student files are automatically uploaded to AWS S3 bucket
-- Files are stored in `students/{fieldname}/` folders in S3 (e.g., `students/studentPhoto/`, `students/studentSignature/`)
+- Files are stored in `students/{fieldname}/` folders in S3 (e.g., `students/studentPhoto/`, `students/studentSignature/`, `students/aadharCardImage/`, `students/schoolCertificateImage/`)
 - Files are publicly accessible via S3 URLs
 - Response includes S3 URLs in respective fields
 
@@ -1333,6 +1337,112 @@ The API uses a nested object structure organized into logical groups:
 
 ---
 
+### Get Teacher Attendance
+**Method:** `GET`  
+**URL:** `/api/admin/attendance/teacher`  
+**Headers:** `Authorization: Bearer <JWT_TOKEN>`
+
+**Description:** Get attendance records for teachers only (staff with role 'TEACHER'). Includes statistics and uses aggregation pipelines for optimal performance.
+
+**Query Parameters:**
+- `teacherId` (optional) - Filter by specific teacher ID (staffId). Returns attendance records for the specified teacher only
+- `date` (optional) - Filter by specific date (YYYY-MM-DD format or ISO date string). Returns attendance records for the specified date only
+- `startDate` (optional) - Start date for date range filter (YYYY-MM-DD format or ISO date string)
+- `endDate` (optional) - End date for date range filter (YYYY-MM-DD format or ISO date string). Must be used with `startDate`
+- `page` (optional) - Page number for pagination (default: 1)
+- `limit` (optional) - Number of records per page (default: 30)
+
+**Query Parameter Combinations:**
+- Get all teacher attendance: `/api/admin/attendance/teacher`
+- Get attendance by teacher ID: `/api/admin/attendance/teacher?teacherId=<TEACHER_ID>`
+- Get attendance by specific date: `/api/admin/attendance/teacher?date=2024-01-15`
+- Get attendance by date range: `/api/admin/attendance/teacher?startDate=2024-01-01&endDate=2024-01-31`
+- Get attendance by teacher ID and date: `/api/admin/attendance/teacher?teacherId=<TEACHER_ID>&date=2024-01-15`
+- Get attendance by teacher ID and date range: `/api/admin/attendance/teacher?teacherId=<TEACHER_ID>&startDate=2024-01-01&endDate=2024-01-31`
+
+**Example Requests:**
+- Get all teacher attendance: `/api/admin/attendance/teacher`
+- Get attendance for a specific teacher: `/api/admin/attendance/teacher?teacherId=DHK001-STF-001`
+- Get attendance for a specific date: `/api/admin/attendance/teacher?date=2024-01-15`
+- Get attendance for a teacher on a specific date: `/api/admin/attendance/teacher?teacherId=DHK001-STF-001&date=2024-01-15`
+- Get attendance for a date range: `/api/admin/attendance/teacher?startDate=2024-01-01&endDate=2024-01-31`
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "attendance": [
+      {
+        "_id": "<ATTENDANCE_ID>",
+        "date": "2024-01-15T00:00:00.000Z",
+        "status": "Present",
+        "timeSlot": "9:00 AM - 5:00 PM",
+        "checkIn": "2024-01-15T09:00:00.000Z",
+        "checkOut": "2024-01-15T17:00:00.000Z",
+        "method": "QR",
+        "teacher": {
+          "_id": "<TEACHER_ID>",
+          "staffId": "DHK001-STF-001",
+          "name": "Teacher Name",
+          "role": "TEACHER",
+          "email": "teacher@example.com",
+          "mobile": "9876543210"
+        },
+        "markedBy": "<USER_ID>",
+        "createdAt": "2024-01-15T09:05:00.000Z",
+        "updatedAt": "2024-01-15T17:30:00.000Z"
+      }
+    ],
+    "statistics": {
+      "totalRecords": 100,
+      "totalTeachers": 5,
+      "present": 85,
+      "absent": 10,
+      "late": 5,
+      "attendancePercentage": 85
+    },
+    "pagination": {
+      "page": 1,
+      "limit": 30,
+      "total": 100,
+      "pages": 4
+    }
+  }
+}
+```
+
+**Response Fields:**
+- `attendance` - Array of teacher attendance records
+  - `_id` - Attendance record ID
+  - `date` - Attendance date
+  - `status` - Attendance status: `Present`, `Absent`, `Late`
+  - `timeSlot` - Time slot (if applicable)
+  - `checkIn` - Teacher check-in time
+  - `checkOut` - Teacher check-out time
+  - `method` - How attendance was marked: `QR`, `MANUAL`
+  - `teacher` - Teacher information (staffId, name, role, email, mobile)
+  - `markedBy` - User who marked the attendance
+  - `createdAt` - Record creation timestamp
+  - `updatedAt` - Record update timestamp
+- `statistics` - Attendance statistics
+  - `totalRecords` - Total number of attendance records
+  - `totalTeachers` - Total number of active teachers in the branch
+  - `present` - Number of present records
+  - `absent` - Number of absent records
+  - `late` - Number of late records
+  - `attendancePercentage` - Overall attendance percentage
+- `pagination` - Pagination information
+
+**Note:**
+- This endpoint only returns attendance for staff with role 'TEACHER'
+- All query parameters are optional and can be combined
+- Uses aggregation pipelines for efficient statistics calculation
+- Results are sorted by date in descending order (most recent first)
+- Only active teachers are included in the statistics
+
+---
+
 ### Get Staff Attendance by ID
 **Method:** `GET`  
 **URL:** `/api/admin/attendance/staff/:id`  
@@ -1427,6 +1537,510 @@ The API uses a nested object structure organized into logical groups:
   "message": "Staff attendance deleted successfully"
 }
 ```
+
+---
+
+### Mark Teacher Attendance
+**Method:** `POST`  
+**URL:** `/api/admin/attendance/teacher`  
+**Headers:** 
+- `Authorization: Bearer <JWT_TOKEN>`
+- `Content-Type: application/json`
+
+**Description:** Mark attendance for teachers only (staff with role 'TEACHER'). Automatically updates class count for teachers with PER_CLASS salary type.
+
+**Body (raw JSON):**
+```json
+{
+  "teacherId": "<TEACHER_ID>",
+  "date": "2024-01-15",
+  "timeSlot": "9:00 AM - 5:00 PM",
+  "method": "QR",
+  "qrData": "{\"staffId\":\"DHK001-STF-001\",\"branchId\":\"<BRANCH_ID>\"}",
+  "checkIn": "2024-01-15T09:00:00.000Z",
+  "checkOut": "2024-01-15T17:00:00.000Z"
+}
+```
+
+**Required Fields:**
+- `teacherId` - Teacher ID (staffId) or ObjectId
+- `date` - Attendance date (YYYY-MM-DD format or ISO date string)
+
+**Optional Fields:**
+- `timeSlot` - Time slot (e.g., "9:00 AM - 5:00 PM")
+- `method` - Attendance method: `QR`, `MANUAL` (default: `MANUAL`)
+- `qrData` - QR code data (required if method is QR)
+- `checkIn` - Teacher check-in time (ISO date string). If not provided, uses current time
+- `checkOut` - Teacher check-out time (ISO date string). Optional, can be set later
+
+**Success Response (201):**
+```json
+{
+  "success": true,
+  "message": "Teacher attendance marked successfully",
+  "data": {
+    "_id": "<ATTENDANCE_ID>",
+    "staffId": {
+      "_id": "<TEACHER_ID>",
+      "staffId": "DHK001-STF-001",
+      "name": "Teacher Name",
+      "role": "TEACHER",
+      "email": "teacher@example.com",
+      "mobile": "9876543210"
+    },
+    "date": "2024-01-15T00:00:00.000Z",
+    "timeSlot": "9:00 AM - 5:00 PM",
+    "checkIn": "2024-01-15T09:00:00.000Z",
+    "checkOut": "2024-01-15T17:00:00.000Z",
+    "status": "Present",
+    "method": "QR",
+    "markedBy": "<USER_ID>",
+    "createdAt": "2024-01-15T09:05:00.000Z",
+    "updatedAt": "2024-01-15T17:30:00.000Z"
+  }
+}
+```
+
+**Method Options:**
+- `QR` - QR code scanning
+- `MANUAL` - Manual entry
+
+**Note:** 
+- Only staff with role 'TEACHER' can be marked using this endpoint
+- `date` is saved and required - it represents the attendance date
+- `checkIn` is automatically set to current time if not provided
+- `checkOut` is optional and can be set later when teacher leaves
+- Calling this endpoint again on the same date will record check-out time if checkOut is not already set
+- Automatically increments `currentMonthClasses` for teachers with `PER_CLASS` salary type
+- Date is normalized to start of day (00:00:00) for consistency
+
+**Error Responses:**
+- `400` - Missing required fields, teacher not active
+- `404` - Teacher not found or is not a teacher
+- `409` - Attendance already marked for this date
+
+---
+
+### Mark Teacher Check-In
+**Method:** `POST`  
+**URL:** `/api/admin/attendance/teacher/check-in`  
+**Headers:** 
+- `Authorization: Bearer <JWT_TOKEN>`
+- `Content-Type: application/json`
+
+**Body (raw JSON):**
+```json
+{
+  "teacherId": "<TEACHER_ID>",
+  "date": "2024-01-15",
+  "timeSlot": "9:00 AM - 5:00 PM",
+  "method": "QR",
+  "qrData": "{\"staffId\":\"DHK001-STF-001\",\"branchId\":\"<BRANCH_ID>\"}",
+  "checkIn": "2024-01-15T09:00:00.000Z"
+}
+```
+
+**Required Fields:**
+- `teacherId` - Teacher ID (staffId) or ObjectId
+- `date` - Attendance date (YYYY-MM-DD format or ISO date string)
+
+**Optional Fields:**
+- `timeSlot` - Time slot (e.g., "9:00 AM - 5:00 PM")
+- `method` - Attendance method: `QR`, `MANUAL` (default: `MANUAL`)
+- `qrData` - QR code data (required if method is QR)
+- `checkIn` - Teacher check-in time (ISO date string). If not provided, uses current time
+
+**Success Response (201):**
+```json
+{
+  "success": true,
+  "message": "Teacher check-in marked successfully",
+  "data": {
+    "_id": "<ATTENDANCE_ID>",
+    "staffId": {
+      "_id": "<TEACHER_ID>",
+      "staffId": "DHK001-STF-001",
+      "name": "Teacher Name",
+      "role": "TEACHER",
+      "email": "teacher@example.com",
+      "mobile": "9876543210"
+    },
+    "date": "2024-01-15T00:00:00.000Z",
+    "timeSlot": "9:00 AM - 5:00 PM",
+    "checkIn": "2024-01-15T09:00:00.000Z",
+    "checkOut": null,
+    "status": "Present",
+    "method": "QR",
+    "markedBy": "<USER_ID>",
+    "createdAt": "2024-01-15T09:05:00.000Z",
+    "updatedAt": "2024-01-15T09:05:00.000Z"
+  }
+}
+```
+
+**Note:** 
+- This API is specifically for marking only the check-in attendance for teachers
+- If attendance already exists for the date, it will update the check-in time
+- `checkOut` will be null until check-out is marked separately
+- `checkIn` is automatically set to current time if not provided
+- Only staff with role 'TEACHER' can use this endpoint
+
+**Error Responses:**
+- `400` - Missing required fields, teacher not active
+- `404` - Teacher not found or is not a teacher
+
+---
+
+### Mark Teacher Check-Out
+**Method:** `POST`  
+**URL:** `/api/admin/attendance/teacher/check-out`  
+**Headers:** 
+- `Authorization: Bearer <JWT_TOKEN>`
+- `Content-Type: application/json`
+
+**Body (raw JSON):**
+```json
+{
+  "teacherId": "<TEACHER_ID>",
+  "date": "2024-01-15",
+  "checkOut": "2024-01-15T17:00:00.000Z",
+  "method": "QR",
+  "qrData": "{\"staffId\":\"DHK001-STF-001\",\"branchId\":\"<BRANCH_ID>\"}"
+}
+```
+
+**Required Fields:**
+- `teacherId` - Teacher ID (staffId) or ObjectId
+- `date` - Attendance date (YYYY-MM-DD format or ISO date string)
+
+**Optional Fields:**
+- `checkOut` - Teacher check-out time (ISO date string). If not provided, uses current time
+- `method` - Attendance method: `QR`, `MANUAL` (default: `MANUAL`)
+- `qrData` - QR code data (required if method is QR)
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "message": "Teacher check-out marked successfully",
+  "data": {
+    "_id": "<ATTENDANCE_ID>",
+    "staffId": {
+      "_id": "<TEACHER_ID>",
+      "staffId": "DHK001-STF-001",
+      "name": "Teacher Name",
+      "role": "TEACHER",
+      "email": "teacher@example.com",
+      "mobile": "9876543210"
+    },
+    "date": "2024-01-15T00:00:00.000Z",
+    "timeSlot": "9:00 AM - 5:00 PM",
+    "checkIn": "2024-01-15T09:00:00.000Z",
+    "checkOut": "2024-01-15T17:00:00.000Z",
+    "status": "Present",
+    "method": "QR",
+    "markedBy": "<USER_ID>",
+    "createdAt": "2024-01-15T09:05:00.000Z",
+    "updatedAt": "2024-01-15T17:30:00.000Z"
+  }
+}
+```
+
+**Note:** 
+- This API is specifically for marking only the check-out attendance for teachers
+- Requires that check-in attendance already exists for the date
+- If attendance doesn't exist, returns error
+- `checkOut` is automatically set to current time if not provided
+- Can be called multiple times to update the check-out time
+- Only staff with role 'TEACHER' can use this endpoint
+
+**Error Responses:**
+- `400` - Missing required fields, check-in not marked for this date
+- `404` - Teacher not found or attendance record not found for the date
+
+---
+
+### Update Teacher Attendance
+**Method:** `POST`  
+**URL:** `/api/admin/attendance/teacher/:id/update`  
+**Headers:** 
+- `Authorization: Bearer <JWT_TOKEN>`
+- `Content-Type: application/json`
+
+**Description:** Updates a teacher attendance record. Only attendance records for teachers (staff with role 'TEACHER') can be updated using this endpoint. Useful for updating status to Absent or Late, or correcting check-in/check-out times.
+
+**Path Parameters:**
+- `id` (required) - Teacher attendance record ID
+
+**Body (raw JSON, all fields optional):**
+```json
+{
+  "status": "Absent",
+  "method": "MANUAL",
+  "checkIn": "2024-01-15T09:00:00.000Z",
+  "checkOut": "2024-01-15T17:00:00.000Z",
+  "date": "2024-01-15",
+  "timeSlot": "9:00 AM - 5:00 PM"
+}
+```
+
+**Optional Fields:**
+- `status` - Attendance status: `Present`, `Absent`, `Late`
+- `method` - Attendance method: `QR`, `MANUAL`
+- `checkIn` - Teacher check-in time (ISO date string)
+- `checkOut` - Teacher check-out time (ISO date string)
+- `date` - Attendance date (YYYY-MM-DD format or ISO date string)
+- `timeSlot` - Time slot (e.g., "9:00 AM - 5:00 PM")
+
+**Valid Status Values:** `Present`, `Absent`, `Late`  
+**Valid Method Values:** `QR`, `MANUAL`
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "message": "Teacher attendance updated successfully",
+  "data": {
+    "_id": "<ATTENDANCE_ID>",
+    "teacher": {
+      "_id": "<TEACHER_ID>",
+      "teacherId": "DHK001-TCH-001",
+      "name": "Teacher Name",
+      "email": "teacher@example.com",
+      "mobile": "9876543210"
+    },
+    "date": "2024-01-15T00:00:00.000Z",
+    "timeSlot": "9:00 AM - 5:00 PM",
+    "checkIn": "2024-01-15T09:00:00.000Z",
+    "checkOut": "2024-01-15T17:00:00.000Z",
+    "status": "Absent",
+    "method": "MANUAL",
+    "markedBy": "<USER_ID>",
+    "createdAt": "2024-01-15T09:05:00.000Z",
+    "updatedAt": "2024-01-15T10:30:00.000Z"
+  }
+}
+```
+
+**Response Fields:**
+- `_id` - Attendance record ID
+- `teacher` - Teacher information (teacherId, name, email, mobile)
+- `date` - Attendance date
+- `timeSlot` - Time slot
+- `checkIn` - Teacher check-in time (can be null)
+- `checkOut` - Teacher check-out time (can be null)
+- `status` - Attendance status (Present, Absent, Late)
+- `method` - Attendance method (QR, MANUAL)
+- `markedBy` - User who marked/updated the attendance
+- `createdAt` - Record creation timestamp
+- `updatedAt` - Record update timestamp
+
+**Error Responses:**
+- `400` - Invalid attendance ID format
+- `400` - Invalid status (must be Present, Absent, or Late)
+- `400` - Invalid method (must be QR or MANUAL)
+- `400` - This attendance record is not for a teacher
+- `404` - Teacher attendance not found
+
+**Notes:**
+- Only attendance records for teachers (staff with role 'TEACHER') can be updated
+- All fields are optional - only provided fields will be updated
+- Status can be updated to `Absent` or `Late` for marking absences or late arrivals
+- Date is normalized to start of day (00:00:00) if provided
+- All updates are logged in audit log
+
+**Example Requests:**
+- Update status to Absent: `POST /api/admin/attendance/teacher/<ATTENDANCE_ID>/update` with `{"status": "Absent"}`
+- Update status to Late: `POST /api/admin/attendance/teacher/<ATTENDANCE_ID>/update` with `{"status": "Late"}`
+- Update check-in time: `POST /api/admin/attendance/teacher/<ATTENDANCE_ID>/update` with `{"checkIn": "2024-01-15T09:30:00.000Z"}`
+- Update multiple fields: `POST /api/admin/attendance/teacher/<ATTENDANCE_ID>/update` with `{"status": "Late", "checkIn": "2024-01-15T09:30:00.000Z", "method": "MANUAL"}`
+
+---
+
+### Delete Teacher Attendance
+**Method:** `POST`  
+**URL:** `/api/admin/attendance/teacher/:id/delete`  
+**Headers:** `Authorization: Bearer <JWT_TOKEN>`
+
+**Description:** Deletes a teacher attendance record. Only attendance records for teachers (staff with role 'TEACHER') can be deleted using this endpoint.
+
+**Path Parameters:**
+- `id` (required) - Teacher attendance record ID
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "message": "Teacher attendance deleted successfully"
+}
+```
+
+**Error Responses:**
+- `400` - Invalid attendance ID format
+- `400` - This attendance record is not for a teacher
+- `404` - Teacher attendance not found
+
+**Notes:**
+- Only attendance records for teachers (staff with role 'TEACHER') can be deleted
+- This action cannot be undone
+- All deletions are logged in audit log
+
+---
+
+### Get All Absent (Students, Teachers, Staff)
+**Method:** `GET`  
+**URL:** `/api/admin/attendance/absent`  
+**Headers:** `Authorization: Bearer <JWT_TOKEN>`
+
+**Query Parameters:**
+- `date` (optional) - Date to check absences (YYYY-MM-DD format). Defaults to today
+- `type` (optional) - Filter by type: `student`, `teacher`, `staff`, or `all` (default: `all`)
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "date": "2024-01-25",
+    "summary": {
+      "totalAbsent": 15,
+      "students": {
+        "total": 10,
+        "marked": 5,
+        "unmarked": 5
+      },
+      "teachers": {
+        "total": 2,
+        "marked": 1,
+        "unmarked": 1
+      },
+      "staff": {
+        "total": 3,
+        "marked": 2,
+        "unmarked": 1
+      }
+    },
+    "absent": {
+      "students": {
+        "marked": [
+          {
+            "_id": "<ATTENDANCE_ID>",
+            "studentId": "DHK001-2024-001",
+            "studentName": "John Doe",
+            "mobileNumber": "1234567890",
+            "batch": {
+              "name": "Morning Batch",
+              "timeSlot": "6:00 AM - 8:00 AM"
+            },
+            "date": "2024-01-25T00:00:00.000Z",
+            "method": "MANUAL",
+            "markedBy": "<USER_ID>"
+          }
+        ],
+        "unmarked": [
+          {
+            "_id": "<STUDENT_ID>",
+            "studentId": "DHK001-2024-002",
+            "studentName": "Jane Smith",
+            "mobileNumber": "0987654321",
+            "batch": {
+              "name": "Evening Batch",
+              "timeSlot": "6:00 PM - 8:00 PM"
+            },
+            "course": {
+              "name": "DCA"
+            },
+            "email": "jane@example.com"
+          }
+        ]
+      },
+      "teachers": {
+        "marked": [
+          {
+            "_id": "<ATTENDANCE_ID>",
+            "teacherId": "DHK001-TCH-001",
+            "name": "Teacher Name",
+            "email": "teacher@example.com",
+            "mobile": "1234567890",
+            "date": "2024-01-25T00:00:00.000Z",
+            "timeSlot": "6:00 AM - 8:00 AM",
+            "method": "MANUAL",
+            "markedBy": "<USER_ID>"
+          }
+        ],
+        "unmarked": [
+          {
+            "_id": "<TEACHER_ID>",
+            "teacherId": "DHK001-TCH-002",
+            "name": "Another Teacher",
+            "email": "another@example.com",
+            "mobile": "0987654321",
+            "assignedBatches": ["<BATCH_ID_1>", "<BATCH_ID_2>"]
+          }
+        ]
+      },
+      "staff": {
+        "marked": [
+          {
+            "_id": "<ATTENDANCE_ID>",
+            "staffId": "DHK001-STF-001",
+            "name": "Staff Name",
+            "email": "staff@example.com",
+            "mobile": "1234567890",
+            "role": "STAFF",
+            "date": "2024-01-25T00:00:00.000Z",
+            "timeSlot": "9:00 AM - 5:00 PM",
+            "method": "MANUAL",
+            "markedBy": "<USER_ID>"
+          }
+        ],
+        "unmarked": [
+          {
+            "_id": "<STAFF_ID>",
+            "staffId": "DHK001-STF-002",
+            "name": "Another Staff",
+            "email": "another@example.com",
+            "mobile": "0987654321",
+            "role": "STAFF"
+          }
+        ]
+      }
+    }
+  }
+}
+```
+
+**Response Fields:**
+- `date` - Date for which absences are checked
+- `summary` - Summary of absences:
+  - `totalAbsent` - Total number of absent people
+  - `students` - Student absence counts (total, marked, unmarked)
+  - `teachers` - Teacher absence counts (total, marked, unmarked)
+  - `staff` - Staff absence counts (total, marked, unmarked)
+- `absent` - Detailed absent records:
+  - `students.marked` - Students with marked absent attendance records
+  - `students.unmarked` - Active students who are absent but not marked (no attendance record)
+  - `teachers.marked` - Teachers with marked absent attendance records
+  - `teachers.unmarked` - Active teachers who are absent but not marked
+  - `staff.marked` - Staff with marked absent attendance records
+  - `staff.unmarked` - Active staff who are absent but not marked
+
+**Notes:**
+- `marked` absences have explicit attendance records with status "Absent"
+- `unmarked` absences are active people who don't have any attendance record (Present/Late) for the date
+- Teachers are identified by matching email between Teacher and Staff models
+- Only active students, teachers, and staff are included in the results
+- Use `type` parameter to filter by specific type (student, teacher, staff, or all)
+
+**Example Requests:**
+- Get all absent for today: `GET /api/admin/attendance/absent`
+- Get absent for specific date: `GET /api/admin/attendance/absent?date=2024-01-25`
+- Get only absent students: `GET /api/admin/attendance/absent?type=student`
+- Get only absent teachers: `GET /api/admin/attendance/absent?type=teacher`
+- Get only absent staff: `GET /api/admin/attendance/absent?type=staff`
+
+**Error Responses:**
+- `500` - Server error
 
 ---
 
@@ -3994,6 +4608,721 @@ https://{bucket-name}.s3.{region}.amazonaws.com/teachers/{filename}
   }
 }
 ```
+
+---
+
+## Expenses
+
+### Create Expense
+**Method:** `POST`  
+**URL:** `/api/admin/expenses`  
+**Headers:** 
+- `Authorization: Bearer <JWT_TOKEN>`
+- `Content-Type: application/json`
+
+**Description:** Record an expense for the authenticated admin. Each admin can only see and manage their own expenses. Branch isolation is enforced.
+
+**Body (raw JSON):**
+```json
+{
+  "title": "Office Supplies",
+  "description": "Purchase of stationery items",
+  "billNumber": "BILL-2024-001",
+  "purpose": "Office maintenance",
+  "amount": 2500,
+  "expenseDate": "2024-01-15"
+}
+```
+
+**Required Fields:**
+- `title` - Expense title (e.g., "Office Supplies", "Electricity Bill")
+- `purpose` - Purpose of the expense (e.g., "Office maintenance", "Utilities")
+- `amount` - Expense amount (number, must be positive)
+
+**Optional Fields:**
+- `description` - Detailed description of the expense
+- `billNumber` - Bill number or receipt number
+- `expenseDate` - Date of expense (YYYY-MM-DD format or ISO date string). Defaults to current date
+
+**Success Response (201):**
+```json
+{
+  "success": true,
+  "message": "Expense recorded successfully",
+  "data": {
+    "_id": "<EXPENSE_ID>",
+    "branchId": "<BRANCH_ID>",
+    "createdBy": "<USER_ID>",
+    "title": "Office Supplies",
+    "description": "Purchase of stationery items",
+    "billNumber": "BILL-2024-001",
+    "purpose": "Office maintenance",
+    "amount": 2500,
+    "expenseDate": "2024-01-15T00:00:00.000Z",
+    "createdAt": "2024-01-15T10:00:00.000Z",
+    "updatedAt": "2024-01-15T10:00:00.000Z"
+  }
+}
+```
+
+**Error Responses:**
+- `400` - Missing required fields (title, purpose, amount)
+- `400` - Amount must be a positive number
+- `500` - Server error
+
+**Notes:**
+- Each admin can only create, view, update, and delete their own expenses
+- Branch isolation is enforced - expenses are automatically assigned to the admin's branch
+- All expense actions are logged in audit log
+
+---
+
+### Get All Expenses
+**Method:** `GET`  
+**URL:** `/api/admin/expenses`  
+**Headers:** `Authorization: Bearer <JWT_TOKEN>`
+
+**Description:** Get all expenses recorded by the authenticated admin. Returns expenses with statistics and pagination.
+
+**Query Parameters:**
+- `startDate` (optional) - Start date for filtering (YYYY-MM-DD format or ISO date string)
+- `endDate` (optional) - End date for filtering (YYYY-MM-DD format or ISO date string)
+- `page` (optional) - Page number (default: 1)
+- `limit` (optional) - Records per page (default: 50)
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "expenses": [
+      {
+        "_id": "<EXPENSE_ID>",
+        "branchId": "<BRANCH_ID>",
+        "createdBy": "<USER_ID>",
+        "title": "Office Supplies",
+        "description": "Purchase of stationery items",
+        "billNumber": "BILL-2024-001",
+        "purpose": "Office maintenance",
+        "amount": 2500,
+        "expenseDate": "2024-01-15T00:00:00.000Z",
+        "createdAt": "2024-01-15T10:00:00.000Z",
+        "updatedAt": "2024-01-15T10:00:00.000Z"
+      },
+      {
+        "_id": "<EXPENSE_ID>",
+        "branchId": "<BRANCH_ID>",
+        "createdBy": "<USER_ID>",
+        "title": "Electricity Bill",
+        "description": "Monthly electricity bill payment",
+        "billNumber": "ELEC-2024-001",
+        "purpose": "Utilities",
+        "amount": 5000,
+        "expenseDate": "2024-01-10T00:00:00.000Z",
+        "createdAt": "2024-01-10T09:00:00.000Z",
+        "updatedAt": "2024-01-10T09:00:00.000Z"
+      }
+    ],
+    "statistics": {
+      "totalExpenses": 10,
+      "totalAmount": 45000,
+      "averageAmount": 4500,
+      "minAmount": 500,
+      "maxAmount": 10000
+    },
+    "pagination": {
+      "page": 1,
+      "limit": 50,
+      "total": 10,
+      "pages": 1
+    }
+  }
+}
+```
+
+**Response Fields:**
+- `expenses` - Array of expense records:
+  - `_id` - Expense ID
+  - `branchId` - Branch ID
+  - `createdBy` - User ID who created the expense
+  - `title` - Expense title
+  - `description` - Expense description
+  - `billNumber` - Bill number (if provided)
+  - `purpose` - Purpose of the expense
+  - `amount` - Expense amount
+  - `expenseDate` - Date of expense
+  - `createdAt` - Record creation timestamp
+  - `updatedAt` - Record update timestamp
+- `statistics` - Expense statistics:
+  - `totalExpenses` - Total number of expenses
+  - `totalAmount` - Total amount of all expenses
+  - `averageAmount` - Average expense amount
+  - `minAmount` - Minimum expense amount
+  - `maxAmount` - Maximum expense amount
+- `pagination` - Pagination information
+
+**Example Requests:**
+- Get all expenses: `GET /api/admin/expenses`
+- Get expenses for date range: `GET /api/admin/expenses?startDate=2024-01-01&endDate=2024-01-31`
+- Get expenses with pagination: `GET /api/admin/expenses?page=1&limit=20`
+
+**Notes:**
+- Only returns expenses created by the authenticated admin
+- Results are sorted by expense date (most recent first), then by creation date
+- Statistics are calculated using aggregation pipelines for optimal performance
+- Branch isolation is enforced
+
+---
+
+### Get Expense by ID
+**Method:** `GET`  
+**URL:** `/api/admin/expenses/:id`  
+**Headers:** `Authorization: Bearer <JWT_TOKEN>`
+
+**Description:** Get a specific expense by ID. Only returns the expense if it was created by the authenticated admin.
+
+**Path Parameters:**
+- `id` (required) - Expense ID
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "_id": "<EXPENSE_ID>",
+    "branchId": "<BRANCH_ID>",
+    "createdBy": "<USER_ID>",
+    "title": "Office Supplies",
+    "description": "Purchase of stationery items",
+    "billNumber": "BILL-2024-001",
+    "purpose": "Office maintenance",
+    "amount": 2500,
+    "expenseDate": "2024-01-15T00:00:00.000Z",
+    "createdAt": "2024-01-15T10:00:00.000Z",
+    "updatedAt": "2024-01-15T10:00:00.000Z"
+  }
+}
+```
+
+**Error Responses:**
+- `400` - Invalid expense ID format
+- `404` - Expense not found (or expense was created by a different admin)
+
+**Notes:**
+- Only returns expenses created by the authenticated admin
+- Branch isolation is enforced
+
+---
+
+### Update Expense
+**Method:** `POST`  
+**URL:** `/api/admin/expenses/:id/update`  
+**Headers:** 
+- `Authorization: Bearer <JWT_TOKEN>`
+- `Content-Type: application/json`
+
+**Description:** Update an expense. Only expenses created by the authenticated admin can be updated.
+
+**Path Parameters:**
+- `id` (required) - Expense ID
+
+**Body (raw JSON, all fields optional):**
+```json
+{
+  "title": "Updated Office Supplies",
+  "description": "Updated description",
+  "billNumber": "BILL-2024-002",
+  "purpose": "Updated purpose",
+  "amount": 3000,
+  "expenseDate": "2024-01-16"
+}
+```
+
+**Optional Fields:**
+- `title` - Expense title
+- `description` - Expense description
+- `billNumber` - Bill number
+- `purpose` - Purpose of the expense
+- `amount` - Expense amount (must be positive number)
+- `expenseDate` - Date of expense (YYYY-MM-DD format or ISO date string)
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "message": "Expense updated successfully",
+  "data": {
+    "_id": "<EXPENSE_ID>",
+    "branchId": "<BRANCH_ID>",
+    "createdBy": "<USER_ID>",
+    "title": "Updated Office Supplies",
+    "description": "Updated description",
+    "billNumber": "BILL-2024-002",
+    "purpose": "Updated purpose",
+    "amount": 3000,
+    "expenseDate": "2024-01-16T00:00:00.000Z",
+    "createdAt": "2024-01-15T10:00:00.000Z",
+    "updatedAt": "2024-01-16T11:00:00.000Z"
+  }
+}
+```
+
+**Error Responses:**
+- `400` - Invalid expense ID format
+- `400` - Amount must be a positive number
+- `404` - Expense not found (or expense was created by a different admin)
+- `500` - Server error
+
+**Notes:**
+- All fields are optional - only provided fields will be updated
+- Only expenses created by the authenticated admin can be updated
+- All updates are logged in audit log
+
+---
+
+### Delete Expense
+**Method:** `POST`  
+**URL:** `/api/admin/expenses/:id/delete`  
+**Headers:** `Authorization: Bearer <JWT_TOKEN>`
+
+**Description:** Delete an expense. Only expenses created by the authenticated admin can be deleted.
+
+**Path Parameters:**
+- `id` (required) - Expense ID
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "message": "Expense deleted successfully"
+}
+```
+
+**Error Responses:**
+- `400` - Invalid expense ID format
+- `404` - Expense not found (or expense was created by a different admin)
+- `500` - Server error
+
+**Notes:**
+- Only expenses created by the authenticated admin can be deleted
+- This action cannot be undone
+- All deletions are logged in audit log
+
+---
+
+## Dynamic Data Storage
+
+### Upload Dynamic Data
+**Method:** `POST`  
+**URL:** `/api/admin/data/upload`  
+**Headers:** 
+- `Authorization: Bearer <JWT_TOKEN>`
+- `Content-Type: application/json`
+
+**Description:** Upload and store any array or JSON data without fixed schema. This flexible API allows storing any data structure (objects, arrays, nested data) without predefined fields. Perfect for storing dynamic data, configurations, or any custom data structures.
+
+**Body (raw JSON):**
+```json
+{
+  "dataType": "inventory",
+  "title": "Office Inventory List",
+  "description": "List of office items",
+  "data": [
+    {
+      "itemName": "Laptop",
+      "quantity": 5,
+      "price": 50000,
+      "category": "Electronics",
+      "purchaseDate": "2024-01-15"
+    },
+    {
+      "itemName": "Printer",
+      "quantity": 2,
+      "price": 15000,
+      "category": "Electronics",
+      "purchaseDate": "2024-01-20"
+    }
+  ],
+  "tags": ["inventory", "office", "equipment"]
+}
+```
+
+**OR with object data:**
+```json
+{
+  "dataType": "settings",
+  "title": "Branch Settings",
+  "description": "Configuration settings",
+  "data": {
+    "workingHours": {
+      "start": "9:00 AM",
+      "end": "6:00 PM"
+    },
+    "holidays": ["2024-01-26", "2024-08-15"],
+    "features": {
+      "qrAttendance": true,
+      "onlinePayment": true,
+      "certificateGeneration": true
+    },
+    "notifications": {
+      "email": true,
+      "sms": false
+    }
+  },
+  "tags": ["settings", "configuration"]
+}
+```
+
+**Required Fields:**
+- `dataType` - Type/category of data (e.g., "inventory", "settings", "custom")
+- `data` - The actual data to store (can be any JSON object or array)
+
+**Optional Fields:**
+- `title` - Title/name for the data record
+- `description` - Description of the data
+- `tags` - Array of tags for categorization
+
+**Success Response (201):**
+```json
+{
+  "success": true,
+  "message": "Data uploaded successfully",
+  "data": {
+    "_id": "<DATA_ID>",
+    "branchId": "<BRANCH_ID>",
+    "createdBy": "<USER_ID>",
+    "dataType": "inventory",
+    "title": "Office Inventory List",
+    "description": "List of office items",
+    "data": [
+      {
+        "itemName": "Laptop",
+        "quantity": 5,
+        "price": 50000,
+        "category": "Electronics",
+        "purchaseDate": "2024-01-15"
+      },
+      {
+        "itemName": "Printer",
+        "quantity": 2,
+        "price": 15000,
+        "category": "Electronics",
+        "purchaseDate": "2024-01-20"
+      }
+    ],
+    "tags": ["inventory", "office", "equipment"],
+    "isActive": true,
+    "createdAt": "2024-01-25T10:00:00.000Z",
+    "updatedAt": "2024-01-25T10:00:00.000Z"
+  }
+}
+```
+
+**Response Fields:**
+- `_id` - Data record ID
+- `branchId` - Branch ID
+- `createdBy` - User ID who created the record
+- `dataType` - Type/category of data
+- `title` - Title of the data record
+- `description` - Description
+- `data` - The stored data (can be any JSON structure)
+- `tags` - Array of tags
+- `isActive` - Active status
+- `createdAt` - Creation timestamp
+- `updatedAt` - Update timestamp
+
+**Error Responses:**
+- `400` - Missing required fields (dataType, data)
+- `400` - Data must be an object or array
+- `500` - Server error
+
+**Notes:**
+- The `data` field can store any JSON structure (objects, arrays, nested objects, etc.)
+- No schema restrictions - you can store any keys and values
+- Each admin can only create, view, update, and delete their own data records
+- Branch isolation is enforced
+- Use `dataType` to categorize different types of data
+- Use `tags` for additional filtering and organization
+
+**Example Use Cases:**
+- Store inventory lists (arrays of items)
+- Store configuration settings (objects with nested properties)
+- Store custom form data
+- Store reports or analytics data
+- Store any dynamic data structure
+
+---
+
+### Get All Dynamic Data
+**Method:** `GET`  
+**URL:** `/api/admin/data`  
+**Headers:** `Authorization: Bearer <JWT_TOKEN>`
+
+**Description:** Get all dynamic data records created by the authenticated admin. Supports filtering by dataType, tag, and active status.
+
+**Query Parameters:**
+- `dataType` (optional) - Filter by data type
+- `tag` (optional) - Filter by tag
+- `isActive` (optional) - Filter by active status (true/false)
+- `page` (optional) - Page number (default: 1)
+- `limit` (optional) - Records per page (default: 50)
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "records": [
+      {
+        "_id": "<DATA_ID>",
+        "branchId": "<BRANCH_ID>",
+        "createdBy": "<USER_ID>",
+        "dataType": "inventory",
+        "title": "Office Inventory List",
+        "description": "List of office items",
+        "data": [
+          {
+            "itemName": "Laptop",
+            "quantity": 5,
+            "price": 50000
+          }
+        ],
+        "tags": ["inventory", "office"],
+        "isActive": true,
+        "createdAt": "2024-01-25T10:00:00.000Z",
+        "updatedAt": "2024-01-25T10:00:00.000Z"
+      }
+    ],
+    "statistics": {
+      "totalRecords": 15,
+      "byDataType": [
+        {
+          "dataType": "inventory",
+          "count": 5
+        },
+        {
+          "dataType": "settings",
+          "count": 3
+        },
+        {
+          "dataType": "custom",
+          "count": 7
+        }
+      ]
+    },
+    "pagination": {
+      "page": 1,
+      "limit": 50,
+      "total": 15,
+      "pages": 1
+    }
+  }
+}
+```
+
+**Response Fields:**
+- `records` - Array of data records with full details
+- `statistics` - Statistics:
+  - `totalRecords` - Total number of records
+  - `byDataType` - Count of records grouped by dataType
+- `pagination` - Pagination information
+
+**Example Requests:**
+- Get all data: `GET /api/admin/data`
+- Get data by type: `GET /api/admin/data?dataType=inventory`
+- Get data by tag: `GET /api/admin/data?tag=office`
+- Get active data only: `GET /api/admin/data?isActive=true`
+- Combined filters: `GET /api/admin/data?dataType=inventory&tag=office&page=1&limit=20`
+
+**Notes:**
+- Only returns data created by the authenticated admin
+- Results are sorted by creation date (most recent first)
+- Statistics are calculated using aggregation pipelines
+
+---
+
+### Get Data by Type
+**Method:** `GET`  
+**URL:** `/api/admin/data/type/:dataType`  
+**Headers:** `Authorization: Bearer <JWT_TOKEN>`
+
+**Description:** Get all data records of a specific type created by the authenticated admin.
+
+**Path Parameters:**
+- `dataType` (required) - Data type to filter by
+
+**Query Parameters:**
+- `page` (optional) - Page number (default: 1)
+- `limit` (optional) - Records per page (default: 50)
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "dataType": "inventory",
+    "records": [
+      {
+        "_id": "<DATA_ID>",
+        "branchId": "<BRANCH_ID>",
+        "createdBy": "<USER_ID>",
+        "dataType": "inventory",
+        "title": "Office Inventory List",
+        "data": [...],
+        "tags": ["inventory", "office"],
+        "isActive": true,
+        "createdAt": "2024-01-25T10:00:00.000Z",
+        "updatedAt": "2024-01-25T10:00:00.000Z"
+      }
+    ],
+    "pagination": {
+      "page": 1,
+      "limit": 50,
+      "total": 5,
+      "pages": 1
+    }
+  }
+}
+```
+
+**Example Requests:**
+- Get inventory data: `GET /api/admin/data/type/inventory`
+- Get settings data: `GET /api/admin/data/type/settings`
+
+---
+
+### Get Data by ID
+**Method:** `GET`  
+**URL:** `/api/admin/data/:id`  
+**Headers:** `Authorization: Bearer <JWT_TOKEN>`
+
+**Description:** Get a specific data record by ID. Only returns the record if it was created by the authenticated admin.
+
+**Path Parameters:**
+- `id` (required) - Data record ID
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "_id": "<DATA_ID>",
+    "branchId": "<BRANCH_ID>",
+    "createdBy": "<USER_ID>",
+    "dataType": "inventory",
+    "title": "Office Inventory List",
+    "description": "List of office items",
+    "data": [
+      {
+        "itemName": "Laptop",
+        "quantity": 5,
+        "price": 50000,
+        "category": "Electronics"
+      }
+    ],
+    "tags": ["inventory", "office"],
+    "isActive": true,
+    "createdAt": "2024-01-25T10:00:00.000Z",
+    "updatedAt": "2024-01-25T10:00:00.000Z"
+  }
+}
+```
+
+**Error Responses:**
+- `400` - Invalid data ID format
+- `404` - Data record not found (or record was created by a different admin)
+
+---
+
+### Update Dynamic Data
+**Method:** `POST`  
+**URL:** `/api/admin/data/:id/update`  
+**Headers:** 
+- `Authorization: Bearer <JWT_TOKEN>`
+- `Content-Type: application/json`
+
+**Description:** Update a data record. Only records created by the authenticated admin can be updated.
+
+**Path Parameters:**
+- `id` (required) - Data record ID
+
+**Body (raw JSON, all fields optional):**
+```json
+{
+  "title": "Updated Title",
+  "description": "Updated description",
+  "data": [
+    {
+      "itemName": "Updated Item",
+      "quantity": 10
+    }
+  ],
+  "tags": ["updated", "tag"],
+  "isActive": true
+}
+```
+
+**Optional Fields:**
+- `title` - Title of the data record
+- `description` - Description
+- `data` - Updated data (can be any JSON structure)
+- `tags` - Array of tags
+- `isActive` - Active status
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "message": "Data updated successfully",
+  "data": {
+    "_id": "<DATA_ID>",
+    "title": "Updated Title",
+    "description": "Updated description",
+    "data": [...],
+    "tags": ["updated", "tag"],
+    "isActive": true,
+    "updatedAt": "2024-01-25T11:00:00.000Z"
+  }
+}
+```
+
+**Error Responses:**
+- `400` - Invalid data ID format
+- `400` - Data must be an object or array
+- `404` - Data record not found
+
+**Notes:**
+- All fields are optional - only provided fields will be updated
+- The `data` field can be completely replaced with new structure
+- All updates are logged in audit log
+
+---
+
+### Delete Dynamic Data
+**Method:** `POST`  
+**URL:** `/api/admin/data/:id/delete`  
+**Headers:** `Authorization: Bearer <JWT_TOKEN>`
+
+**Description:** Delete a data record. Only records created by the authenticated admin can be deleted.
+
+**Path Parameters:**
+- `id` (required) - Data record ID
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "message": "Data deleted successfully"
+}
+```
+
+**Error Responses:**
+- `400` - Invalid data ID format
+- `404` - Data record not found
+
+**Notes:**
+- This action cannot be undone
+- All deletions are logged in audit log
 
 ---
 

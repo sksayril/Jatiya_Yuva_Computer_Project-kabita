@@ -10,6 +10,7 @@ const express = require('express');
 const authRoutes = require('./routes/auth.routes');
 const dashboardRoutes = require('./routes/dashboard.routes');
 const attendanceRoutes = require('./routes/attendance.routes');
+const profileRoutes = require('./routes/profile.routes');
 const batchRoutes = require('./routes/batch.routes');
 const examRoutes = require('./routes/exam.routes');
 const recordedClassRoutes = require('./routes/recordedClass.routes');
@@ -29,6 +30,9 @@ router.use('/dashboard', dashboardRoutes);
 
 // Attendance
 router.use('/attendance', attendanceRoutes);
+
+// Profile
+router.use('/profile', profileRoutes);
 
 // Batches
 router.use('/batches', batchRoutes);

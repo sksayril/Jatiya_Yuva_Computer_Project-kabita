@@ -21,6 +21,8 @@ const certificateRoutes = require('./routes/certificate.routes');
 const inquiryRoutes = require('./routes/inquiry.routes');
 const recordedClassRoutes = require('./routes/recordedClass.routes');
 const reportRoutes = require('./routes/report.routes');
+const expenseRoutes = require('./routes/expense.routes');
+const dynamicDataRoutes = require('./routes/dynamicData.routes');
 
 // Create router (not app)
 const router = express.Router();
@@ -68,6 +70,12 @@ router.use('/recorded-classes', recordedClassRoutes);
 
 // Reports
 router.use('/reports', reportRoutes);
+
+// Expenses
+router.use('/expenses', expenseRoutes);
+
+// Dynamic Data (Flexible data storage)
+router.use('/data', dynamicDataRoutes);
 
 // Health check endpoint
 router.get('/health', (req, res) => {

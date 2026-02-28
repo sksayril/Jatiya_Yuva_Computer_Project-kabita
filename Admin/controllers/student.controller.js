@@ -237,6 +237,12 @@ const manualRegistration = async (req, res) => {
     let finalStudentId = providedStudentId;
     if (!finalStudentId || finalStudentId === 'AUTO') {
       finalStudentId = await generateStudentId(branch.code, Student);
+      // Verify studentId doesn't already exist (double-check)
+      const existingStudentId = await Student.findOne({ studentId: finalStudentId });
+      if (existingStudentId) {
+        // If exists, generate a new one
+        finalStudentId = await generateStudentId(branch.code, Student);
+      }
     }
 
     // Handle file uploads
@@ -251,6 +257,12 @@ const manualRegistration = async (req, res) => {
       : '';
     const formScanImage = req.files?.formScanImage?.[0]
       ? req.files.formScanImage[0].location || req.files.formScanImage[0].path
+      : '';
+    const aadharCardImage = req.files?.aadharCardImage?.[0]
+      ? req.files.aadharCardImage[0].location || req.files.aadharCardImage[0].path
+      : '';
+    const schoolCertificateImage = req.files?.schoolCertificateImage?.[0]
+      ? req.files.schoolCertificateImage[0].location || req.files.schoolCertificateImage[0].path
       : '';
 
     // Generate unique password based on student ID
@@ -373,6 +385,8 @@ const manualRegistration = async (req, res) => {
       studentSignature,
       officeSignature,
       formScanImage,
+      aadharCardImage,
+      schoolCertificateImage,
       status,
       totalFees,
       dueAmount,
@@ -392,8 +406,51 @@ const manualRegistration = async (req, res) => {
       console.log('📝 Course info:', { courseId, courseName: finalCourseName, courseType, totalFees });
     }
 
-    // Create student
-    const student = await Student.create(studentData);
+    // Create student with retry logic for duplicate key errors
+    let student;
+    let retries = 0;
+    const maxRetries = 3;
+    let currentStudentId = finalStudentId;
+    
+    while (retries < maxRetries) {
+      try {
+        // Update studentId in studentData for retry attempts
+        studentData.studentId = currentStudentId;
+        
+        student = await Student.create(studentData);
+        break; // Success, exit retry loop
+      } catch (createError) {
+        // Check if it's a duplicate key error for studentId
+        if (createError.code === 11000 && createError.keyPattern && createError.keyPattern.studentId) {
+          retries++;
+          if (retries >= maxRetries) {
+            // Max retries reached, return error
+            return res.status(409).json({
+              success: false,
+              message: `Student ID "${currentStudentId}" already exists. Please try again.`,
+              error: config.isDevelopment() ? createError.message : undefined,
+            });
+          }
+          // Generate a new studentId and retry (only if AUTO mode)
+          if (!providedStudentId || providedStudentId === 'AUTO') {
+            currentStudentId = await generateStudentId(branch.code, Student);
+            // Also update password generation with new studentId
+            studentData.loginCredentials.password = await generateStudentPassword(currentStudentId);
+            studentData.loginCredentials.email = email || `${currentStudentId.toLowerCase()}@${branch.code.toLowerCase()}.edu`;
+          } else {
+            // Custom ID provided but duplicate - return error immediately
+            return res.status(409).json({
+              success: false,
+              message: `Student ID "${currentStudentId}" already exists. Please use a different ID.`,
+              error: config.isDevelopment() ? createError.message : undefined,
+            });
+          }
+          continue;
+        }
+        // If it's a different error (e.g., duplicate email), throw it
+        throw createError;
+      }
+    }
 
     // Update batch student count if batch exists
     if (batchId) {
@@ -409,7 +466,7 @@ const manualRegistration = async (req, res) => {
       action: 'CREATE',
       module: 'STUDENT',
       entityId: student._id,
-      newData: { studentId: finalStudentId, studentName, mobileNumber },
+      newData: { studentId: student.studentId, studentName, mobileNumber },
       ip: req.ip,
       userAgent: req.get('user-agent'),
     });
@@ -426,6 +483,25 @@ const manualRegistration = async (req, res) => {
     });
   } catch (error) {
     console.error('Manual registration error:', error);
+    
+    // Handle duplicate key errors specifically
+    if (error.code === 11000) {
+      if (error.keyPattern && error.keyPattern.studentId) {
+        return res.status(409).json({
+          success: false,
+          message: `Student ID "${error.keyValue?.studentId || 'unknown'}" already exists. Please try again or use a different ID.`,
+          error: config.isDevelopment() ? error.message : undefined,
+        });
+      }
+      if (error.keyPattern && error.keyPattern.email) {
+        return res.status(409).json({
+          success: false,
+          message: 'Email already registered',
+          error: config.isDevelopment() ? error.message : undefined,
+        });
+      }
+    }
+    
     res.status(500).json({
       success: false,
       message: 'Server error during student registration',

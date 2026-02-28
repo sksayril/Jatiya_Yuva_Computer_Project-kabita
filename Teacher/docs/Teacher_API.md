@@ -12,13 +12,15 @@ Complete API documentation for the Teacher Panel of National Youth Computer Cent
 
 1. [Authentication](#authentication)
 2. [Dashboard](#dashboard)
-3. [Student Attendance](#student-attendance)
-4. [Batch Details](#batch-details)
-5. [Exams & Marks Management](#exams--marks-management)
-6. [Recorded Classes & Study Materials](#recorded-classes--study-materials)
-7. [Notices](#notices)
-8. [Notifications](#notifications)
-9. [Performance View](#performance-view)
+3. [My Attendance](#my-attendance)
+4. [My Profile](#my-profile)
+5. [Student Attendance](#student-attendance)
+6. [Batch Details](#batch-details)
+7. [Exams & Marks Management](#exams--marks-management)
+8. [Recorded Classes & Study Materials](#recorded-classes--study-materials)
+9. [Notices](#notices)
+10. [Notifications](#notifications)
+11. [Performance View](#performance-view)
 
 ---
 
@@ -111,12 +113,46 @@ Complete API documentation for the Teacher Panel of National Youth Computer Cent
 {
   "success": true,
   "data": {
+    "teacher": {
+      "_id": "507f1f77bcf86cd799439010",
+      "teacherId": "DHK001-TCH-001",
+      "name": "John Teacher",
+      "email": "teacher@example.com",
+      "mobile": "1234567890"
+    },
+    "branch": {
+      "_id": "507f1f77bcf86cd799439011",
+      "name": "Dhaka Branch",
+      "code": "DHK001"
+    },
     "todayClasses": [
       {
         "batchId": "507f1f77bcf86cd799439012",
         "batchName": "Morning Batch",
-        "timeSlot": "AM",
-        "courseId": "507f1f77bcf86cd799439011"
+        "timeSlot": "6:00 AM - 8:00 AM",
+        "courseId": "507f1f77bcf86cd799439011",
+        "courseName": "DCA",
+        "weekdays": ["Monday", "Wednesday", "Friday"]
+      }
+    ],
+    "upcomingClasses": [
+      {
+        "date": "2024-01-25",
+        "dayName": "Thursday",
+        "batchId": "507f1f77bcf86cd799439012",
+        "batchName": "Morning Batch",
+        "timeSlot": "6:00 AM - 8:00 AM",
+        "courseId": "507f1f77bcf86cd799439011",
+        "courseName": "DCA"
+      },
+      {
+        "date": "2024-01-26",
+        "dayName": "Friday",
+        "batchId": "507f1f77bcf86cd799439012",
+        "batchName": "Morning Batch",
+        "timeSlot": "6:00 AM - 8:00 AM",
+        "courseId": "507f1f77bcf86cd799439011",
+        "courseName": "DCA"
       }
     ],
     "assignedCourses": [
@@ -130,7 +166,8 @@ Complete API documentation for the Teacher Panel of National Youth Computer Cent
       {
         "id": "507f1f77bcf86cd799439012",
         "name": "Morning Batch",
-        "timeSlot": "AM"
+        "timeSlot": "6:00 AM - 8:00 AM",
+        "weekdays": ["Monday", "Wednesday", "Friday"]
       }
     ],
     "todayAttendance": {
@@ -141,6 +178,73 @@ Complete API documentation for the Teacher Panel of National Youth Computer Cent
       "totalStudents": 25,
       "attendancePercentage": 80
     },
+    "myAttendance": {
+      "thisWeek": {
+        "totalDays": 5,
+        "present": 4,
+        "absent": 1,
+        "totalHours": 32.5
+      },
+      "thisMonth": {
+        "totalDays": 20,
+        "present": 18,
+        "absent": 2,
+        "totalHours": 144.0
+      },
+      "attendancePercentage": 80
+    },
+    "thisWeekHours": 32.5,
+    "graphData": [
+      {
+        "date": "2024-01-19",
+        "dayName": "Friday",
+        "present": 1,
+        "absent": 0,
+        "hours": 8.0
+      },
+      {
+        "date": "2024-01-20",
+        "dayName": "Saturday",
+        "present": 0,
+        "absent": 0,
+        "hours": 0
+      },
+      {
+        "date": "2024-01-21",
+        "dayName": "Sunday",
+        "present": 0,
+        "absent": 0,
+        "hours": 0
+      },
+      {
+        "date": "2024-01-22",
+        "dayName": "Monday",
+        "present": 1,
+        "absent": 0,
+        "hours": 8.5
+      },
+      {
+        "date": "2024-01-23",
+        "dayName": "Tuesday",
+        "present": 0,
+        "absent": 0,
+        "hours": 0
+      },
+      {
+        "date": "2024-01-24",
+        "dayName": "Wednesday",
+        "present": 1,
+        "absent": 0,
+        "hours": 8.0
+      },
+      {
+        "date": "2024-01-25",
+        "dayName": "Thursday",
+        "present": 1,
+        "absent": 0,
+        "hours": 8.0
+      }
+    ],
     "notifications": [
       {
         "type": "CLASS_REMINDER",
@@ -164,6 +268,403 @@ Complete API documentation for the Teacher Panel of National Youth Computer Cent
   }
 }
 ```
+
+**Response Fields:**
+- `teacher` - Teacher information (name, teacherId, email, mobile)
+- `branch` - Branch information (name, code)
+- `todayClasses` - Today's scheduled classes based on batch weekdays
+- `upcomingClasses` - Next 10 upcoming classes (next 7 days)
+- `assignedCourses` - List of courses assigned to teacher
+- `assignedBatches` - List of batches assigned to teacher with weekdays
+- `todayAttendance` - Today's student attendance summary for assigned batches
+- `myAttendance` - Teacher's own attendance statistics:
+  - `thisWeek` - This week's attendance (totalDays, present, absent, totalHours)
+  - `thisMonth` - This month's attendance (totalDays, present, absent, totalHours)
+  - `attendancePercentage` - Overall attendance percentage
+- `thisWeekHours` - Total hours worked this week (calculated from check-in/check-out)
+- `graphData` - Last 7 days attendance data for graph visualization:
+  - `date` - Date in YYYY-MM-DD format
+  - `dayName` - Day of the week
+  - `present` - 1 if present, 0 if absent
+  - `absent` - 1 if absent, 0 if present
+  - `hours` - Hours worked on that day (from check-in/check-out)
+- `notifications` - Array of notifications and reminders
+
+---
+
+## My Attendance
+
+### Get My Attendance Details
+**Method:** `GET`  
+**URL:** `/api/teacher/attendance/my`  
+**Headers:** `Authorization: Bearer <JWT_TOKEN>`
+
+**Query Parameters:**
+- `startDate` (optional) - Start date for filtering (YYYY-MM-DD)
+- `endDate` (optional) - End date for filtering (YYYY-MM-DD)
+- `page` (optional) - Page number (default: 1)
+- `limit` (optional) - Records per page (default: 30)
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "attendance": [
+      {
+        "_id": "507f1f77bcf86cd799439012",
+        "date": "2024-01-25T00:00:00.000Z",
+        "status": "Present",
+        "timeSlot": "6:00 AM - 8:00 AM",
+        "checkIn": "2024-01-25T06:00:00.000Z",
+        "checkOut": "2024-01-25T08:00:00.000Z",
+        "method": "MANUAL",
+        "hours": 2.0,
+        "createdAt": "2024-01-25T06:05:00.000Z",
+        "updatedAt": "2024-01-25T08:00:00.000Z"
+      },
+      {
+        "_id": "507f1f77bcf86cd799439013",
+        "date": "2024-01-24T00:00:00.000Z",
+        "status": "Present",
+        "timeSlot": "6:00 AM - 8:00 AM",
+        "checkIn": "2024-01-24T06:05:00.000Z",
+        "checkOut": "2024-01-24T08:00:00.000Z",
+        "method": "QR",
+        "hours": 1.92,
+        "createdAt": "2024-01-24T06:05:00.000Z",
+        "updatedAt": "2024-01-24T08:00:00.000Z"
+      }
+    ],
+    "statistics": {
+      "overall": {
+        "totalDays": 45,
+        "present": 40,
+        "absent": 3,
+        "late": 2,
+        "totalHours": 320.5,
+        "percentage": 89
+      },
+      "thisWeek": {
+        "totalDays": 5,
+        "present": 4,
+        "absent": 1,
+        "totalHours": 32.5,
+        "percentage": 80
+      },
+      "thisMonth": {
+        "totalDays": 20,
+        "present": 18,
+        "absent": 2,
+        "totalHours": 144.0,
+        "percentage": 90
+      }
+    },
+    "pagination": {
+      "page": 1,
+      "limit": 30,
+      "total": 45,
+      "pages": 2
+    }
+  }
+}
+```
+
+**Response Fields:**
+- `attendance` - Array of attendance records with:
+  - `date` - Attendance date
+  - `status` - Present, Absent, or Late
+  - `timeSlot` - Time slot if available
+  - `checkIn` - Check-in timestamp
+  - `checkOut` - Check-out timestamp
+  - `method` - Attendance method (QR, MANUAL)
+  - `hours` - Hours worked (calculated from check-in/check-out)
+- `statistics` - Attendance statistics:
+  - `overall` - Overall statistics (all time)
+  - `thisWeek` - This week's statistics
+  - `thisMonth` - This month's statistics
+  - Each includes: totalDays, present, absent, late (overall only), totalHours, percentage
+- `pagination` - Pagination information
+
+**Error Responses:**
+- `404` - Teacher not found
+- `500` - Server error
+
+---
+
+### Get My Absence and Late History
+**Method:** `GET`  
+**URL:** `/api/teacher/attendance/absence-history`  
+**Headers:** `Authorization: Bearer <JWT_TOKEN>`
+
+**Query Parameters:**
+- `page` (optional) - Page number (default: 1)
+- `limit` (optional) - Records per page (default: 30)
+- `status` (optional) - Filter by status: `Absent`, `Late`, or both (default: both)
+
+**Description:** Get all absent and late attendance records for the authenticated teacher. Similar to student absence history API.
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "absences": [
+      {
+        "_id": "507f1f77bcf86cd799439012",
+        "date": "2024-01-20T00:00:00.000Z",
+        "timeSlot": "6:00 AM - 8:00 AM",
+        "checkIn": null,
+        "checkOut": null,
+        "method": "MANUAL",
+        "hours": 0,
+        "markedBy": "<USER_ID>",
+        "createdAt": "2024-01-20T06:05:00.000Z",
+        "updatedAt": "2024-01-20T06:05:00.000Z"
+      },
+      {
+        "_id": "507f1f77bcf86cd799439013",
+        "date": "2024-01-18T00:00:00.000Z",
+        "timeSlot": "6:00 AM - 8:00 AM",
+        "checkIn": null,
+        "checkOut": null,
+        "method": "MANUAL",
+        "hours": 0,
+        "markedBy": "<USER_ID>",
+        "createdAt": "2024-01-18T06:05:00.000Z",
+        "updatedAt": "2024-01-18T06:05:00.000Z"
+      }
+    ],
+    "lates": [
+      {
+        "_id": "507f1f77bcf86cd799439014",
+        "date": "2024-01-22T00:00:00.000Z",
+        "timeSlot": "6:00 AM - 8:00 AM",
+        "checkIn": "2024-01-22T06:15:00.000Z",
+        "checkOut": "2024-01-22T08:00:00.000Z",
+        "method": "QR",
+        "hours": 1.75,
+        "markedBy": "<USER_ID>",
+        "createdAt": "2024-01-22T06:15:00.000Z",
+        "updatedAt": "2024-01-22T08:00:00.000Z"
+      }
+    ],
+    "summary": {
+      "totalAbsentDays": 2,
+      "totalLateDays": 1,
+      "totalDays": 3
+    },
+    "pagination": {
+      "page": 1,
+      "limit": 30,
+      "total": 3,
+      "pages": 1
+    },
+    "note": "Absence and late history is read-only. Contact admin for any queries."
+  }
+}
+```
+
+**Response Fields:**
+- `absences` - Array of absent attendance records:
+  - `_id` - Attendance record ID
+  - `date` - Absence date
+  - `timeSlot` - Time slot if available
+  - `checkIn` - Check-in timestamp (usually null for absent)
+  - `checkOut` - Check-out timestamp (usually null for absent)
+  - `method` - Attendance method (QR, MANUAL)
+  - `hours` - Hours worked (usually 0 for absent)
+  - `markedBy` - User who marked the attendance
+  - `createdAt` - Record creation timestamp
+  - `updatedAt` - Record update timestamp
+- `lates` - Array of late attendance records:
+  - Same structure as absences
+  - `checkIn` and `checkOut` may be present
+  - `hours` - Hours worked (calculated from check-in/check-out)
+- `summary` - Summary statistics:
+  - `totalAbsentDays` - Total number of absent days
+  - `totalLateDays` - Total number of late days
+  - `totalDays` - Total absent and late days combined
+- `pagination` - Pagination information
+- `note` - Informational message
+
+**Example Requests:**
+- Get all absence and late records: `GET /api/teacher/attendance/absence-history`
+- Get only absent records: `GET /api/teacher/attendance/absence-history?status=Absent`
+- Get only late records: `GET /api/teacher/attendance/absence-history?status=Late`
+- Get with pagination: `GET /api/teacher/attendance/absence-history?page=1&limit=20`
+
+**Notes:**
+- Returns both absent and late records by default
+- Use `status` parameter to filter by specific status
+- Records are sorted by date in descending order (most recent first)
+- If teacher has no Staff record for attendance tracking, returns empty results
+- Absence and late history is read-only
+
+**Error Responses:**
+- `404` - Teacher not found
+- `500` - Server error
+
+---
+
+## My Profile
+
+### Get My Profile
+**Method:** `GET`  
+**URL:** `/api/teacher/profile`  
+**Headers:** `Authorization: Bearer <JWT_TOKEN>`
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "teacher": {
+      "_id": "507f1f77bcf86cd799439010",
+      "teacherId": "DHK001-TCH-001",
+      "name": "John Teacher",
+      "email": "teacher@example.com",
+      "mobile": "1234567890",
+      "isActive": true,
+      "imageUrl": "/uploads/teachers/photo.jpg",
+      "idCardUrl": "/uploads/teachers/id-card.jpg",
+      "createdAt": "2024-01-15T00:00:00.000Z"
+    },
+    "branch": {
+      "_id": "507f1f77bcf86cd799439011",
+      "name": "Dhaka Branch",
+      "code": "DHK001",
+      "contactNumber": "1234567890",
+      "addresses": [
+        {
+          "areaname": "Dhanmondi",
+          "city": "Dhaka",
+          "pincode": "1205",
+          "location": {
+            "latitude": 23.7465,
+            "longitude": 90.3760
+          }
+        }
+      ]
+    },
+    "assignedBatches": [
+      {
+        "_id": "507f1f77bcf86cd799439012",
+        "name": "Morning Batch",
+        "timeSlot": "6:00 AM - 8:00 AM",
+        "weekdays": ["Monday", "Wednesday", "Friday"],
+        "course": {
+          "id": "507f1f77bcf86cd799439011",
+          "name": "DCA",
+          "category": "Certificate"
+        },
+        "isActive": true
+      }
+    ],
+    "assignedCourses": [
+      {
+        "id": "507f1f77bcf86cd799439011",
+        "name": "DCA",
+        "category": "Certificate",
+        "duration": "6 months"
+      }
+    ],
+    "totalStudents": 25,
+    "todayAttendance": {
+      "status": "Present",
+      "checkIn": "2024-01-25T06:00:00.000Z",
+      "checkOut": "2024-01-25T08:00:00.000Z",
+      "timeSlot": "6:00 AM - 8:00 AM",
+      "method": "MANUAL",
+      "hours": 2.0
+    },
+    "attendance": {
+      "overall": {
+        "totalDays": 45,
+        "present": 40,
+        "absent": 3,
+        "late": 2,
+        "totalHours": 320.5,
+        "percentage": 88.89
+      },
+      "thisWeek": {
+        "totalDays": 5,
+        "present": 4,
+        "absent": 1,
+        "totalHours": 32.5,
+        "percentage": 80.0
+      },
+      "thisMonth": {
+        "totalDays": 20,
+        "present": 18,
+        "absent": 2,
+        "totalHours": 144.0,
+        "percentage": 90.0
+      },
+      "recentAttendance": [
+        {
+          "date": "2024-01-25T00:00:00.000Z",
+          "status": "Present",
+          "checkIn": "2024-01-25T06:00:00.000Z",
+          "checkOut": "2024-01-25T08:00:00.000Z",
+          "timeSlot": "6:00 AM - 8:00 AM",
+          "method": "MANUAL",
+          "hours": 2.0
+        }
+      ]
+    },
+    "salary": {
+      "salaryType": "PER_CLASS",
+      "salaryRate": 500,
+      "currentMonthClasses": 20,
+      "currentMonthSalary": 10000,
+      "estimatedSalary": 10000
+    },
+    "upcomingExams": [
+      {
+        "_id": "507f1f77bcf86cd799439018",
+        "examName": "Monthly Test",
+        "examType": "Monthly",
+        "examDate": "2024-01-25T10:00:00.000Z",
+        "batch": {
+          "id": "507f1f77bcf86cd799439012",
+          "name": "Morning Batch"
+        },
+        "course": {
+          "id": "507f1f77bcf86cd799439011",
+          "name": "DCA"
+        },
+        "maxMarks": 100,
+        "passingMarks": 40
+      }
+    ]
+  }
+}
+```
+
+**Response Fields:**
+- `teacher` - Teacher information (teacherId, name, email, mobile, isActive, imageUrl, idCardUrl, createdAt)
+- `branch` - Branch information (name, code, contactNumber, addresses)
+- `assignedBatches` - List of batches assigned to teacher with course details and weekdays
+- `assignedCourses` - List of courses assigned to teacher
+- `totalStudents` - Total number of active students in assigned batches
+- `todayAttendance` - Today's attendance record (if marked)
+- `attendance` - Attendance statistics:
+  - `overall` - Overall statistics (all time)
+  - `thisWeek` - This week's statistics
+  - `thisMonth` - This month's statistics
+  - `recentAttendance` - Last 10 attendance records
+- `salary` - Salary information:
+  - `salaryType` - PER_CLASS, MONTHLY_FIXED, or HOURLY
+  - `salaryRate` - Rate per class/month/hour
+  - `currentMonthClasses` - Classes taken this month (for PER_CLASS)
+  - `currentMonthSalary` - Salary earned this month
+  - `estimatedSalary` - Estimated salary based on salary type
+- `upcomingExams` - Next 5 upcoming exams for assigned batches
+
+**Error Responses:**
+- `404` - Teacher not found
+- `500` - Server error
 
 ---
 
