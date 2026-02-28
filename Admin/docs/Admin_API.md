@@ -909,6 +909,46 @@ The API uses a nested object structure organized into logical groups:
 
 ---
 
+### Update Student Data
+**Method:** `PATCH` or `POST`  
+**URL:** `/api/admin/students/:id` or `/api/admin/students/:id/update`  
+**Headers:** 
+- `Authorization: Bearer <JWT_TOKEN>`
+- `Content-Type: multipart/form-data` (if uploading files) or `application/json`
+
+**Description:** Updates an existing student's data. Supports partial updates. All files (photo, signatures, etc.) can be updated and will be uploaded to AWS S3.
+
+**Body:**
+Same nested structure as **Manual Student Registration**. All fields are optional.
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "message": "Student updated successfully",
+  "data": { ... }
+}
+```
+
+---
+
+### Delete Student Data
+**Method:** `DELETE` or `POST`  
+**URL:** `/api/admin/students/:id` or `/api/admin/students/:id/delete`  
+**Headers:** `Authorization: Bearer <JWT_TOKEN>`
+
+**Description:** Permanently deletes a student's data from the system. Also updates the student count in the assigned batch.
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "message": "Student deleted successfully"
+}
+```
+
+---
+
 ## Attendance
 
 ### Mark Student Attendance

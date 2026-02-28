@@ -10,6 +10,8 @@ const {
   joinBatch,
   getStudents,
   getStudentById,
+  updateStudent,
+  deleteStudent,
 } = require('../controllers/student.controller');
 const { authenticateAdmin, authorizeRoles } = require('../middlewares/auth.middleware');
 const { enforceBranchIsolation } = require('../middlewares/branchIsolation.middleware');
@@ -24,5 +26,13 @@ router.post('/:id/reactivate', authenticateAdmin, authorizeRoles(['ADMIN']), enf
 router.post('/:id/change-batch', authenticateAdmin, authorizeRoles(['ADMIN']), enforceBranchIsolation, changeBatch);
 router.post('/:id/join-batch', authenticateAdmin, authorizeRoles(['ADMIN']), enforceBranchIsolation, joinBatch);
 router.get('/:id', authenticateAdmin, authorizeRoles(['ADMIN']), enforceBranchIsolation, getStudentById);
+
+// Update Student
+router.patch('/:id', authenticateAdmin, authorizeRoles(['ADMIN']), enforceBranchIsolation, uploadStudentFiles, updateStudent);
+router.post('/:id/update', authenticateAdmin, authorizeRoles(['ADMIN']), enforceBranchIsolation, uploadStudentFiles, updateStudent);
+
+// Delete Student
+router.delete('/:id', authenticateAdmin, authorizeRoles(['ADMIN']), enforceBranchIsolation, deleteStudent);
+router.post('/:id/delete', authenticateAdmin, authorizeRoles(['ADMIN']), enforceBranchIsolation, deleteStudent);
 
 module.exports = router;
